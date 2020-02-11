@@ -51,9 +51,9 @@ def ICESAT2GRD(args):
     can_h_met = []   # Relative	(RH--)	canopy height	metrics calculated	at	the	following	percentiles: 25,	50,	60,	70,	75,	80,	85,	90,	95
     h_max_can = []
     h_can = []      # 98% height of all the individual canopy relative heights for the segment above the estimated terrain surface. Relative canopy heights have been computed by differencing the canopy photon height from the estimated terrain surface.
-
-    n_ca_pho = []
-    n_toc_pho = []
+    
+    n_ca_ph = []
+    n_toc_ph = []
     can_open = []    # stdv of all photons classified as canopy within segment
     tcc_flg = [] # Flag indicating that more than 50% of the Landsat Continuous Cover product have values > 100 for the L-Km segment.  Canopy is assumed present along the L-km segment if landsat_flag is 1.
     tcc_prc = [] # Average percentage value of the valid (value <= 100) Landsat Tree Cover Continuous Fields product for each 100 m segment
@@ -73,6 +73,7 @@ def ICESAT2GRD(args):
     sig_topo = []         # Total uncertainty that include sigma_h plus geolocation uncertainty due to local slope (equation 1.3).  The local slope is multiplied by the geolocation uncertainty factor. This will be used to determine the total vertical geolocation error due to ranging and local slope.
 
     # Terrain fields
+    n_te_ph = []
     h_te_best = []  # The best fit terrain elevation at the the mid-point location of each 100m segment. The mid-segment terrain elevation is determined by selecting the best of three fits- linear, 3rd order and 4th order polynomials - to the terrain photons and interpolating the elevation at the mid-point location of the 100 m segment. For the linear fit, a slope correction and weighting is applied to each ground photon based on the distance to the slope height at the center of the segment.
     h_te_unc = []    # Uncertainty of the mean terrain height for the segment. This uncertainty incorporates all systematic uncertainties(e.g. timing orbits, geolocation,etc.) as well as uncertainty from errors of identified photons.  This parameter is described in section 1, equation 1.4
     ter_slp = []        # The along-track slope of terrain, within each segment;computed by a linear fit of terrain classified photons. Slope is in units of delta height over delta along track distance.
@@ -129,9 +130,9 @@ def ICESAT2GRD(args):
         can_h_met.append(f['/' + line   + '/land_segments/canopy/canopy_h_metrics/'][...,].tolist())
         h_max_can.append(f['/' + line   + '/land_segments/canopy/h_max_canopy/'][...,].tolist())
         h_can.append(f['/' + line       + '/land_segments/canopy/h_canopy/'][...,].tolist())
-
-        n_ca_pho.append(f['/' + line    + '/land_segments/canopy/n_ca_photons/'][...,].tolist())
-        n_toc_pho.append(f['/' + line   + '/land_segments/canopy/n_toc_photons/'][...,].tolist())
+        
+        n_ca_ph.append(f['/' + line    + '/land_segments/canopy/n_ca_photons/'][...,].tolist())
+        n_toc_ph.append(f['/' + line   + '/land_segments/canopy/n_toc_photons/'][...,].tolist())
         can_open.append(f['/' + line    + '/land_segments/canopy/canopy_openness/'][...,].tolist())
         tcc_flg.append(f['/' + line     + '/land_segments/canopy/landsat_flag/'][...,].tolist())
         tcc_prc.append(f['/' + line     + '/land_segments/canopy/landsat_perc/'][...,].tolist())
@@ -151,6 +152,7 @@ def ICESAT2GRD(args):
         sig_topo.append(f['/' + line    + '/land_segments/sigma_topo/'][...,].tolist())
 
         # Terrain fields
+        n_te_ph.append(f['/' + line    + '/land_segments/terrain/n_te_photons/'][...,].tolist())        
         h_te_best.append(f['/' + line   + '/land_segments/terrain/h_te_best_fit/'][...,].tolist())
         h_te_unc.append(f['/' + line    + '/land_segments/terrain/h_te_uncertainty/'][...,].tolist())
         ter_slp.append(f['/' + line     + '/land_segments/terrain/terrain_slope/'][...,].tolist())
@@ -170,9 +172,9 @@ def ICESAT2GRD(args):
     can_h_met   =np.array([can_h_met[l][k] for l in range(6) for k in range(len(can_h_met[l]))] )
     h_max_can   =np.array([h_max_can[l][k] for l in range(6) for k in range(len(h_max_can[l]))] )
     h_can       =np.array([h_can[l][k] for l in range(6) for k in range(len(h_can[l]))] )
-
-    n_ca_pho    =np.array([n_ca_pho[l][k] for l in range(6) for k in range(len(n_ca_pho[l]))] )
-    n_toc_pho   =np.array([n_toc_pho[l][k] for l in range(6) for k in range(len(n_toc_pho[l]))] )
+    
+    n_ca_ph     =np.array([n_ca_ph[l][k] for l in range(6) for k in range(len(n_ca_ph[l]))] )
+    n_toc_ph    =np.array([n_toc_ph[l][k] for l in range(6) for k in range(len(n_toc_ph[l]))] )
     can_open    =np.array([can_open[l][k] for l in range(6) for k in range(len(can_open[l]))] )
     tcc_flg     =np.array([tcc_flg[l][k] for l in range(6) for k in range(len(tcc_flg[l]))] )
     tcc_prc     =np.array([tcc_prc[l][k] for l in range(6) for k in range(len(tcc_prc[l]))] )
@@ -190,6 +192,7 @@ def ICESAT2GRD(args):
     sig_h       =np.array([sig_h[l][k] for l in range(6) for k in range(len(sig_h[l]))] )
     sig_topo    =np.array([sig_topo[l][k] for l in range(6) for k in range(len(sig_topo[l]))] )
 
+    n_te_p o    =np.array([n_te_ph[l][k] for l in range(6) for k in range(len(n_te_ph[l]))] )
     h_te_best   =np.array([h_te_best[l][k] for l in range(6) for k in range(len(h_te_best[l]))] )
     h_te_unc    =np.array([h_te_unc[l][k] for l in range(6) for k in range(len(h_te_unc[l]))] )
     ter_slp     =np.array([ter_slp[l][k] for l in range(6) for k in range(len(ter_slp[l]))] )
@@ -255,8 +258,8 @@ def ICESAT2GRD(args):
                     'rh90'      :can_h_met[:,7],
                     'rh95'      :can_h_met[:,8],
 
-                    'n_ca_pho'  :n_ca_pho,
-                    'n_toc_pho' :n_toc_pho,
+                    'n_ca_ph'  :n_ca_ph,
+                    'n_toc_ph' :n_toc_ph,
                     'can_open'  :can_open,
                     'tcc_flg'   :tcc_flg,
                     'tcc_prc'   :tcc_prc,
@@ -274,6 +277,7 @@ def ICESAT2GRD(args):
                     'sig_h'     :sig_h,
                     'sig_topo'  :sig_topo,
 
+                    'n_te_ph'   :n_te_ph,
                     'h_te_best' :h_te_best,
                     'h_te_unc'  :h_te_unc,
                     'ter_slp'   :ter_slp,
