@@ -192,7 +192,7 @@ def ICESAT2GRD(args):
     sig_h       =np.array([sig_h[l][k] for l in range(6) for k in range(len(sig_h[l]))] )
     sig_topo    =np.array([sig_topo[l][k] for l in range(6) for k in range(len(sig_topo[l]))] )
 
-    n_te_p o    =np.array([n_te_ph[l][k] for l in range(6) for k in range(len(n_te_ph[l]))] )
+    n_te_ph     =np.array([n_te_ph[l][k] for l in range(6) for k in range(len(n_te_ph[l]))] )
     h_te_best   =np.array([h_te_best[l][k] for l in range(6) for k in range(len(h_te_best[l]))] )
     h_te_unc    =np.array([h_te_unc[l][k] for l in range(6) for k in range(len(h_te_unc[l]))] )
     ter_slp     =np.array([ter_slp[l][k] for l in range(6) for k in range(len(ter_slp[l]))] )
