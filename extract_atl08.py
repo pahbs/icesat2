@@ -114,7 +114,13 @@ def ICESAT2GRD(args):
     # For each laser read the data and append to its list
     for line in lines:
 
-        latitude.append(f['/' + line    + '/land_segments/latitude/'][...,].tolist())
+        # It might be the case that a specific line/laser has no members in the h5 file.
+        # If so, catch the error and skip - MW 3/31
+        try:
+            latitude.append(f['/' + line    + '/land_segments/latitude/'][...,].tolist())
+        except KeyError:
+            continue # No info for laser/line, skip it and move on to next line
+
         longitude.append(f['/' + line   + '/land_segments/longitude/'][...,].tolist())
 
         # Get ground track
@@ -160,47 +166,57 @@ def ICESAT2GRD(args):
         sol_az.append(f['/' + line      + '/land_segments/solar_azimuth/'][...,].tolist())
         sol_el.append(f['/' + line      + '/land_segments/solar_elevation/'][...,].tolist())
 
+    # MW 3/31: Originally a length of 6 was hardcoded into the below calculations because the
+    #          assumption was made that 6 lines/lasers worth of data was stored in the arrays. With
+    #	       the above changes made to the beginning of the 'for line in lines' loop on 3/31, this
+    #          assumption is no longer always true. Adding nLines var to replace range(6) below
+    nLines = len(latitude)
+
+    # Be sure at least one of the lasers/lines for the h5 file had data points - MW added block 3/31
+    if nLines == 0:
+        return None # No usable points in h5 file, can't process
+
     # Convert the list of lists into a single list
-    latitude    =np.array([latitude[l][k] for l in range(6) for k in range(len(latitude[l]))] )
-    longitude   =np.array([longitude[l][k] for l in range(6) for k in range(len(longitude[l]))] )
+    latitude    =np.array([latitude[l][k] for l in range(nLines) for k in range(len(latitude[l]))] )
+    longitude   =np.array([longitude[l][k] for l in range(nLines) for k in range(len(longitude[l]))] )
 
-    gt          =np.array([gt[l][k] for l in range(6) for k in range(len(gt[l]))] )
+    gt          =np.array([gt[l][k] for l in range(nLines) for k in range(len(gt[l]))] )
 
-    segid_beg   =np.array([segid_beg[l][k] for l in range(6) for k in range(len(segid_beg[l]))] )
-    segid_end   =np.array([segid_end[l][k] for l in range(6) for k in range(len(segid_end[l]))] )
+    segid_beg   =np.array([segid_beg[l][k] for l in range(nLines) for k in range(len(segid_beg[l]))] )
+    segid_end   =np.array([segid_end[l][k] for l in range(nLines) for k in range(len(segid_end[l]))] )
 
-    can_h_met   =np.array([can_h_met[l][k] for l in range(6) for k in range(len(can_h_met[l]))] )
-    h_max_can   =np.array([h_max_can[l][k] for l in range(6) for k in range(len(h_max_can[l]))] )
-    h_can       =np.array([h_can[l][k] for l in range(6) for k in range(len(h_can[l]))] )
+    can_h_met   =np.array([can_h_met[l][k] for l in range(nLines) for k in range(len(can_h_met[l]))] )
+    h_max_can   =np.array([h_max_can[l][k] for l in range(nLines) for k in range(len(h_max_can[l]))] )
+    h_can       =np.array([h_can[l][k] for l in range(nLines) for k in range(len(h_can[l]))] )
     
-    n_ca_ph     =np.array([n_ca_ph[l][k] for l in range(6) for k in range(len(n_ca_ph[l]))] )
-    n_toc_ph    =np.array([n_toc_ph[l][k] for l in range(6) for k in range(len(n_toc_ph[l]))] )
-    can_open    =np.array([can_open[l][k] for l in range(6) for k in range(len(can_open[l]))] )
-    tcc_flg     =np.array([tcc_flg[l][k] for l in range(6) for k in range(len(tcc_flg[l]))] )
-    tcc_prc     =np.array([tcc_prc[l][k] for l in range(6) for k in range(len(tcc_prc[l]))] )
+    n_ca_ph     =np.array([n_ca_ph[l][k] for l in range(nLines) for k in range(len(n_ca_ph[l]))] )
+    n_toc_ph    =np.array([n_toc_ph[l][k] for l in range(nLines) for k in range(len(n_toc_ph[l]))] )
+    can_open    =np.array([can_open[l][k] for l in range(nLines) for k in range(len(can_open[l]))] )
+    tcc_flg     =np.array([tcc_flg[l][k] for l in range(nLines) for k in range(len(tcc_flg[l]))] )
+    tcc_prc     =np.array([tcc_prc[l][k] for l in range(nLines) for k in range(len(tcc_prc[l]))] )
 
-    cloud_flg   =np.array([cloud_flg[l][k] for l in range(6) for k in range(len(cloud_flg[l]))] )
-    msw_flg     =np.array([msw_flg[l][k] for l in range(6) for k in range(len(msw_flg[l]))] )
-    n_seg_ph    =np.array([n_seg_ph[l][k] for l in range(6) for k in range(len(n_seg_ph[l]))] )
-    night_flg    =np.array([night_flg[l][k] for l in range(6) for k in range(len(night_flg[l]))] )
+    cloud_flg   =np.array([cloud_flg[l][k] for l in range(nLines) for k in range(len(cloud_flg[l]))] )
+    msw_flg     =np.array([msw_flg[l][k] for l in range(nLines) for k in range(len(msw_flg[l]))] )
+    n_seg_ph    =np.array([n_seg_ph[l][k] for l in range(nLines) for k in range(len(n_seg_ph[l]))] )
+    night_flg    =np.array([night_flg[l][k] for l in range(nLines) for k in range(len(night_flg[l]))] )
 
-    seg_snow    =np.array([seg_snow[l][k] for l in range(6) for k in range(len(seg_snow[l]))] )
-    seg_water   =np.array([seg_water[l][k] for l in range(6) for k in range(len(seg_water[l]))] )
-    sig_vert    =np.array([sig_vert[l][k] for l in range(6) for k in range(len(sig_vert[l]))] )
-    sig_acr     =np.array([sig_acr[l][k] for l in range(6) for k in range(len(sig_acr[l]))] )
-    sig_along   =np.array([sig_along[l][k] for l in range(6) for k in range(len(sig_along[l]))] )
-    sig_h       =np.array([sig_h[l][k] for l in range(6) for k in range(len(sig_h[l]))] )
-    sig_topo    =np.array([sig_topo[l][k] for l in range(6) for k in range(len(sig_topo[l]))] )
+    seg_snow    =np.array([seg_snow[l][k] for l in range(nLines) for k in range(len(seg_snow[l]))] )
+    seg_water   =np.array([seg_water[l][k] for l in range(nLines) for k in range(len(seg_water[l]))] )
+    sig_vert    =np.array([sig_vert[l][k] for l in range(nLines) for k in range(len(sig_vert[l]))] )
+    sig_acr     =np.array([sig_acr[l][k] for l in range(nLines) for k in range(len(sig_acr[l]))] )
+    sig_along   =np.array([sig_along[l][k] for l in range(nLines) for k in range(len(sig_along[l]))] )
+    sig_h       =np.array([sig_h[l][k] for l in range(nLines) for k in range(len(sig_h[l]))] )
+    sig_topo    =np.array([sig_topo[l][k] for l in range(nLines) for k in range(len(sig_topo[l]))] )
 
-    n_te_ph     =np.array([n_te_ph[l][k] for l in range(6) for k in range(len(n_te_ph[l]))] )
-    h_te_best   =np.array([h_te_best[l][k] for l in range(6) for k in range(len(h_te_best[l]))] )
-    h_te_unc    =np.array([h_te_unc[l][k] for l in range(6) for k in range(len(h_te_unc[l]))] )
-    ter_slp     =np.array([ter_slp[l][k] for l in range(6) for k in range(len(ter_slp[l]))] )
-    snr         =np.array([snr[l][k] for l in range(6) for k in range(len(snr[l]))] )
-    sol_az      =np.array([sol_az[l][k] for l in range(6) for k in range(len(sol_az[l]))] )
-    sol_el      =np.array([sol_el[l][k] for l in range(6) for k in range(len(sol_el[l]))] )
+    n_te_ph     =np.array([n_te_ph[l][k] for l in range(nLines) for k in range(len(n_te_ph[l]))] )
+    h_te_best   =np.array([h_te_best[l][k] for l in range(nLines) for k in range(len(h_te_best[l]))] )
+    h_te_unc    =np.array([h_te_unc[l][k] for l in range(nLines) for k in range(len(h_te_unc[l]))] )
+    ter_slp     =np.array([ter_slp[l][k] for l in range(nLines) for k in range(len(ter_slp[l]))] )
+    snr         =np.array([snr[l][k] for l in range(nLines) for k in range(len(snr[l]))] )
+    sol_az      =np.array([sol_az[l][k] for l in range(nLines) for k in range(len(sol_az[l]))] )
+    sol_el      =np.array([sol_el[l][k] for l in range(nLines) for k in range(len(sol_el[l]))] )
 
-
+    print len(latitude), len(sol_el)
     # Default set to 100.0
     h_max_can[h_max_can>args.thresh_ht_max_can] = 0
 
