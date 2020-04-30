@@ -1,0 +1,444 @@
+---
+title: "Plot the ATL08 CSV files output from extract_atl08.py"
+output: html_notebook
+---
+
+```{r}
+require(plyr)
+require(reshape2)
+require(maps)
+require(tidyverse)
+require(RColorBrewer)
+require(viridis)
+require(gridExtra)
+require(sf)
+
+pal_rev_spectral9 = rev(brewer.pal(9, "Spectral"))
+pal_RdYlGn = brewer.pal(9, "RdYlGn")
+
+source(paste0("C:\\Users\\pmontesa\\Google Drive\\Work\\R","\\","plot_functions.R"))
+cont_shp="D:/databank/arc/continents.shp"
+
+thresh_h_can=30
+
+rad2deg <- function(rad) {(rad * 180) / (pi)}
+deg2rad <- function(deg) {(deg * pi) / (180)}
+# meter_per_degree <- function(cent_lat){
+#     # Calc args.resolution in degrees
+#     ellipse = c(6378137.0, 6356752.314245)
+#     radlat = deg2rad(cent_lat)
+#     Rsq = (ellipse[1]*cos(radlat))**2+(ellipse[2]*sin(radlat))**2
+#     Mlat = (ellipse[1]*ellipse[2])**2/(Rsq**1.5)
+#     Nlon = ellipse[1]**2/sqrt(Rsq)
+#     pixelSpacingInDegreeX = float(args.resolution) / (np.pi/180*cos(radlat)*Nlon)
+#     pixelSpacingInDegreeY = float(args.resolution) / (np.pi/180*Mlat)
+# }
+
+coord_map_stereo_list <- function(proj_name = "stereo", rotation = 0, min_lat = 50, caption = NULL){ 
+  # Defines the x axes required
+  lat_lines = seq(min_lat+10, 80, by = 10)
+  lat_labs = paste0(seq(min_lat+10, 80, by = 10), "°N")
+  
+  lon_lines = seq(0, 330, by = 30)
+  lon_labs = c(paste0(seq(0, 180, by = 30), "°E"), rev(paste0(seq(30, 150, by = 30), "°W")))
+  
+  return(list(
+       # Convert to polar coordinates
+      coord_map(proj_name, orientation = c(90, 0, rotation)), #"ortho""
+      scale_y_continuous(breaks = seq(55, 90, by = 5), labels = NULL),
+    
+      # Removes Axes and labels
+      scale_x_continuous(breaks = NULL),
+      xlab(""),
+      ylab(""),
+    
+      # Adds labels
+      geom_text(aes(x = 0, y = lat_lines, hjust = 0.5, label = lat_labs)),
+      geom_text(aes(x = lon_lines, y = min_lat-3, hjust = 0.5, label = lon_labs), size = 3),
+    
+      # Adds axes
+      # Latitude
+      geom_hline(aes(yintercept = lat_lines), size = 0.25, color = "grey80", linetype = "dotted"),
+      # Outer circular border
+      geom_hline(aes(yintercept = min_lat), size = 1),
+      # Longitude
+      geom_vline(aes(xintercept = lon_lines), size = 0.25, color = "grey80", linetype = "dotted"),
+      #geom_segment(aes(y = 45, yend = 85, x = x_lines, xend = x_lines), linetype = "dotted") +
+        
+       ##guides(fill=FALSE)+
+      
+      # Change theme to remove axes and ticks
+      theme(panel.background = element_blank(),
+          #panel.grid = element_line(size = 0.25, linetype = 'dotted', colour = "grey50"),
+          axis.ticks=element_blank()),
+      labs(caption = caption)
+  ))
+}  
+
+```
+
+
+```{r fig.width=15, fig.height=5}
+#
+# Before this:
+# search for H5 files
+# extract relevant fields from H5 and return a CSV
+# specify a main dir where all CSVs sit, and run this chunk
+
+# SETUP VARS
+main_dir = "D:/projects/above_icesat2/atl08"
+setwd(main_dir)
+continents = c("eu", "na")
+minlat = 45
+
+#########################
+# BUILD CSV LIST OF ATL08 
+#
+csv_list=c()
+for(cont in continents){
+  tmp_list = list.files(path = paste0(main_dir,"/csv_",cont), pattern = "\\.csv$", full.names=TRUE)
+  csv_list = c(csv_list,tmp_list)
+  rm(tmp_list)
+  zone='circ'
+}
+
+
+plots_dir = paste0("plots/boreal_",zone,format(Sys.time(), "_%Y%m%d_%H%M"))
+dir.create(file.path(main_dir, plots_dir), showWarnings = FALSE)
+
+#########################
+# FILTER THE ATL08 
+#
+# Get a filtered data frame of ATL08 data
+# Get all individual tables into 1 data frame and filter!
+df_all = do.call("rbind",lapply(csv_list, FUN=function(files){ read.csv(files)})) %>%
+  dplyr::filter(n_toc_pho>0)%>%
+  dplyr::filter(h_can<thresh_h_can)%>%
+  dplyr::filter(h_te_unc!=max(h_te_unc))%>%
+  dplyr::filter(ter_slp!=max(ter_slp))%>%
+  #dplyr::filter(!can_open == max(df$can_open))%>%
+  #dplyr::filter(can_open < 12)%>%
+  dplyr::filter(lat > minlat)#%>%
+  #dplyr::mapvalues(seg_snow,  from = c(0,1,2,3), to=c("ice free water", "snow free land","snow", "ice"))%>%
+  #dplyr::mapvalues(night_flg, from = c(0,1), to=c("day","night"))%>%
+  #dplyr::mapvalues(tcc_flg, from = c(0,1), to=c("≤ 5%","> 5%"))
+  #dplyr::filter(cloud_flg == 0)%>%
+  #dplyr::filter(seg_snow == 0)
+  #dplyr::filter(night_flg == 1)
+
+# Assign names to categorical variables that can be used to subset data
+df_all$seg_snow  = mapvalues(factor(df_all$seg_snow), from = c(0,1,2,3), to=c("ice free water", "snow free land","snow", "ice"))
+df_all$night_flg = mapvalues(factor(df_all$night_flg), from = c(0,1), to=c("day","night"))
+df_all$tcc_flg   = mapvalues(factor(df_all$tcc_flg), from = c(0,1), to=c("≤ 5%","> 5%"))
+
+# Make treecover classes
+cc_bin=10
+df_all$tcc_bin = cut(df_all$tcc_prc, seq(0,100,cc_bin), labels= as.character(seq(cc_bin,100,cc_bin)) )
+
+names(df_all)[grep("open",names(df_all))] <- 'can_open'
+
+# Write out a massive CSV of all ATL08 points from H5 files youve found
+write.csv(df_all, file = path(main_dir, plots_dir, paste0("ATL08_filt_lat_gt",minlat,"_h_lt",thresh_h_can,".csv")), row.names=FALSE)
+```
+
+```{r}
+df = sample_frac(df_all, 1)
+
+theme_and_labs = list(
+    theme_classic(),
+    labs(subtitle = paste0("ICESat-2 ATL08 100m segments above ",round(min(df$lat),dig=1),"N, west of ",round(max(df$lon),dig=1),"W from Aug-Sep 2019"),
+          caption = paste0(prettyNum(dim(df)[1],big.mark=",",scientific=FALSE), " segments across Landsat tree cover bins, ATL09 snow cover classes")),
+    facet_grid(seg_snow~tcc_bin, scales = "free_y")
+)
+scale_color_h_can = list(
+  scale_colour_gradientn( breaks=c(1,5,10,thresh_h_can-10), limits = c(0,thresh_h_can-10), colours=pal_RdYlGn, name="Canopy\nht, (m)")
+)
+
+# Hists of canopy photon cnts
+
+# Hist of num canopy photons day, night
+hist_ncanpho_night_flg_tcc = ggplot(df, aes(x=n_ca_pho, fill=factor(night_flg))) +
+  labs(x="# canopy photons per segment")+
+   geom_histogram(binwidth = 1)+
+   theme_classic() +
+  facet_grid(tcc_bin~.)+
+  scale_x_continuous(limits = c(0,200))+
+  scale_fill_viridis(option="magma", discrete=TRUE, begin=0, end = 0.9, direction=-1, name='Acq. type')+
+  guides(fill = guide_legend(nrow = 1,label.position = "bottom"))+
+  theme(legend.position="top")
+
+hist_snr_night_flg = ggplot(df) + 
+    geom_histogram(aes(snr, fill=factor(night_flg)), binwidth = 0.25)+
+    labs(x="Signal-to-noise ratio")+
+     theme_classic() +
+  facet_grid(.~night_flg, scales="free_y")+
+  scale_x_continuous(limits = c(0,50))+
+  scale_fill_viridis(option="magma", discrete=TRUE, begin=0, end = 0.9, direction=-1, name='Acq. type')+
+    guides(fill = guide_legend(nrow = 1,label.position = "bottom"))+
+  theme(legend.position="top")
+
+# DOY polar hist
+polar_doy = ggplot(df, aes(x = d )) + 
+  geom_density()+
+  scale_x_continuous(limits = c(1,365), breaks = seq(0,360,30))+
+  theme_bw()+coord_polar()+
+  theme(axis.text.y = element_blank(), axis.title = element_blank())+
+  labs(title="Seasonal frequency of ATL08 canopy height estimates", subtitle = "Day of year")
+ggsave(plot = polar_doy,
+         file = paste0(main_dir,"/",plots_dir,"/", "polar_doy",format(Sys.time(), "_%Y%m%d_%H%M"),".png"),
+         device = 'png', dpi = 300, width = 5, height = 5)
+# ggplot(df, aes(x = sol_el, y=sol_az, alpha=snr )) +
+#   geom_point(size=.001)+
+#     scale_x_continuous(limits = c(1,360), breaks = seq(0,360,30))+
+#   theme_bw()+coord_polar()+
+#   theme(axis.text.y = element_blank(), axis.title = element_blank())
+
+```
+# Difference in h_can between week and strong beams during day and night in tcc bins
+
+# Show histograms facets by tree cover and snow, colored by clouds
+```{r fig.height=4, fig.width=8}
+# Histogram of heights per TCC and snow cover class
+hist_ht_tcc_snow = ggplot(df, aes(x=h_can, fill=factor(cloud_flg))) +
+  theme_and_labs +
+  labs(title="Histogram of relative (rh98) canopy heights", x="Height (rh98,m)")+
+  geom_histogram(binwidth = 0.1)+
+  scale_x_continuous(limits = c(0,25), breaks = c(5,10,15,20,25))+
+  scale_y_continuous(limits = c(0,15000))+
+  scale_fill_manual(values = rev(brewer.pal(7, "PuBuGn")), name="Cloud\nconfidence")
+ggsave(plot = hist_ht_tcc_snow,
+         file = paste0(main_dir,"/",plots_dir,"/", "hist_ht_tcc_snow_",format(Sys.time(), "_%Y%m%d_%H%M"),".png"),
+         device = 'png', dpi = 300, width = 10, height = 6)
+
+# Hist of can_open
+hist_can_open = ggplot(df, aes(x=can_open)) +
+   geom_histogram(position="stack", binwidth = 0.1)+
+   theme_classic()+
+  scale_x_continuous(limits = c(0,10))+
+  labs(x="Canopy openness (m; stdv of # canopy photons segment)")
+
+# Hist of can_open
+hist_can_patch = ggplot(df, aes(x=100*(can_open/h_max_can))) +
+   geom_histogram(position="stack", binwidth = 0.1)+
+   theme_classic()+
+  facet_grid(.~tcc_bin)+
+  scale_x_continuous(limits = c(0,100))+
+  labs(x="Canopy patchiness (%; variation (cv) in canopy height of segment)")
+print(hist_can_patch)
+
+# Hist of unc ht (uncertainty)
+hist_h_te_unc = ggplot(df, aes(x=h_te_unc)) +
+   geom_histogram(position="stack", binwidth = 1)+
+   theme_classic()+
+  scale_x_continuous(limits = c(0,100))+
+  labs(x="Uncertainty of the mean terrain height for the segment (m)")
+
+# Slp vs canopy openness
+plot_slp_open = 
+  ggplot(df) +
+  geom_point(aes(y=can_open, x=ter_slp, color=h_can), size=0.01, alpha=0.1)+
+  scale_x_continuous(limits = c(-0.5,0.5), breaks = seq(-0.5,0.5,0.25))+
+   theme_classic()+
+  scale_color_h_can+
+  facet_grid(seg_snow~., scales = "free_y")+
+  labs(y="Canopy openness (m; stdv of # canopy photons segment)", x="Along-track terrain slope")
+print(plot_slp_open)
+
+# Slp vs canopy pacthiness
+plot_slp_patch = 
+  ggplot(df) +
+  geom_point(aes(y=100*(can_open/h_can), x=ter_slp, color=h_can), size=0.01, alpha=0.1)+
+  scale_x_continuous(limits = c(-0.5,0.5), breaks = seq(-0.5,0.5,0.25))+
+   theme_classic()+
+  scale_color_h_can+
+  facet_grid(seg_snow~., scales = "free_y")+
+  labs(y="Canopy openness (m; stdv of # canopy photons segment)", x="Along-track terrain slope")
+#print(plot_slp_open)
+
+# 
+plot_unc = ggplot(df) + 
+    geom_point(aes(y=h_te_unc, x=ter_slp, colour=h_can), size=0.01, alpha=0.1)+
+    scale_x_continuous(limits = c(-0.5,0.5), breaks = seq(-0.5,0.5,0.25))+
+  scale_y_log10() +
+   theme_classic()+
+  scale_color_h_can+
+  facet_grid(seg_snow~., scales = "free_y")+
+    labs(y="Height uncertainty (m)", x="Along-track terrain slope")
+
+
+mp1 = grid.arrange(grobs = list(hist_can_open,hist_h_te_unc, plot_slp_open, plot_unc), 
+                   layout.matix = rbind(c(1,2),
+                                        c(3,4),
+                                        c(3,4) ))
+ggsave(plot = mp1,
+         file = paste0(main_dir,"/",plots_dir,"/", "mp1_",format(Sys.time(), "_%Y%m%d_%H%M"),".png"),
+         device = 'png', dpi = 300, width = 10, height = 10)
+
+```
+
+# Show spatial distribution of canopy height (maps), filtering NA from tcc_bin
+```{r fig.height=10, fig.width=10}
+
+df_in_tcc = df%>%filter(!is.na(tcc_bin))
+
+#####################################
+# Do map
+continents.df = shp_fort_join(cont_shp, extent(-180, 180, -90, 90))
+continents.df_stereo = shp_fort_join(cont_shp, extent(-180, 180, minlat, 90))
+
+# World map, using geom_path instead of geom_polygon
+world <- map_data("world") 
+worldmap <- ggplot(world) + geom_path(aes(x = long, y = lat, group = group), alpha=0.1) 
+
+map_height = list(
+    geom_point(data=df_in_tcc, aes(x = lon, y = lat, colour=h_can), alpha=0.01, size = 0.001),
+    labs(title="Relative (rh98) canopy heights", subtitle = "For Landsat tree cover extent")
+)
+map_rh50 = list(
+    geom_point(data=df_in_tcc, aes(x = lon, y = lat, colour=rh50), alpha=0.01, size = 0.001),
+    labs(title="Relative (rh50) canopy heights", subtitle = "For Landsat tree cover extent")
+)
+map_openness = list(
+    geom_point(data=df_in_tcc, aes(x = lon, y = lat, colour=can_open), alpha=0.01,size = 0.001),
+    scale_colour_viridis_c( limits=c(1,6),  name="Canopy\nOpenness, (m)"),
+    labs(title = "Canopy Openness: stdv of canopy photon heights in segment", subtitle = "For Landsat tree cover extent")
+)
+map_cover = list(
+    geom_point(data=df_in_tcc, aes(x = lon, y = lat, colour=100*(n_ca_pho/n_seg_ph)), alpha=0.01,size = 0.001),
+    scale_colour_viridis_c(option = "magma", limits=c(1,60), name="Canopy\ncover, (%)"),
+    labs(title = "Canopy cover", subtitle = "For Landsat tree cover extent")
+)
+
+map_conts_ortho_rh98 = worldmap + #ggplot() +
+      coord_map("ortho", orientation = c(mean(df_in_tcc$lat), mean(df_in_tcc$lon), 0))+
+      #coord_map_list("ortho", cent_lat=mean(df_in_tcc$lat), cent_lon=mean(df_in_tcc$lon), n_caption=NULL)+
+      #geom_polygon(data = continents.df, aes(x = long, y = lat, group = group), fill = "grey90", colour = NA, size = 0.05)+
+      map_height+
+      theme_minimal()+theme(axis.text = element_blank(), axis.title = element_blank())+
+      scale_color_h_can
+map_conts_ortho_rh50 = worldmap + #ggplot() +
+      coord_map("ortho", orientation = c(mean(df_in_tcc$lat), mean(df_in_tcc$lon), 0))+    
+      map_rh50+
+      theme_minimal()+theme(axis.text = element_blank(), axis.title = element_blank())+
+      scale_color_h_can
+map_conts_ortho_canopen = worldmap + #ggplot() +
+      coord_map("ortho", orientation = c(mean(df_in_tcc$lat), mean(df_in_tcc$lon), 0))+
+      map_openness
+      theme_minimal()+theme(axis.text = element_blank(), axis.title = element_blank())
+map_conts_ortho_cover = worldmap + #ggplot() +
+      coord_map("ortho", orientation = c(mean(df_in_tcc$lat), mean(df_in_tcc$lon), 0))+
+      map_cover  
+      theme_minimal()+theme(axis.text = element_blank(), axis.title = element_blank())
+      
+ggsave(plot = map_conts_ortho_rh98,
+         file = paste0(main_dir,"/",plots_dir,"/", "map_conts_ortho_rh98_",format(Sys.time(), "_%Y%m%d_%H%M"),".png"),
+         device = 'png', dpi = 300, width = 6, height = 6)
+ggsave(plot = map_conts_ortho_rh50,
+         file = paste0(main_dir,"/",plots_dir,"/", "map_conts_ortho_rh50_",format(Sys.time(), "_%Y%m%d_%H%M"),".png"),
+         device = 'png', dpi = 300, width = 6, height = 6)
+ggsave(plot = map_conts_ortho_canopen,
+         file = paste0(main_dir,"/",plots_dir,"/", "map_conts_ortho_canopen_",format(Sys.time(), "_%Y%m%d_%H%M"),".png"),
+         device = 'png', dpi = 300, width = 6, height = 6)
+ggsave(plot = map_conts_ortho_cover,
+         file = paste0(main_dir,"/",plots_dir,"/", "map_conts_ortho_cover_",format(Sys.time(), "_%Y%m%d_%H%M"),".png"),
+         device = 'png', dpi = 300, width = 6, height = 6)
+
+map_polar = ggplot() + 
+  geom_polygon(data = continents.df_stereo, aes(x = long, y = lat, group = group), fill = "grey", colour = "black", alpha = 0.35) +
+  coord_map_stereo_list(min_lat = minlat)+
+  map_height+
+  scale_color_h_can
+ggsave(plot = map_polar,
+         file = paste0(main_dir,"/",plots_dir,"/", "map_polar_",format(Sys.time(), "_%Y%m%d_%H%M"),".png"),
+         device = 'png', dpi = 300, width = 10, height = 10)
+```
+# Prop of tcc & snow free land segments with cloud score=0
+```{r}
+
+```
+
+
+# Look at ortho map of height across domain; why hts in tundra?
+```{r}
+
+map_world_ortho = worldmap + 
+  map_height +
+  coord_map("ortho", orientation = c(mean(df_in_tcc$lat), mean(df_in_tcc$lon), 0))+
+  coord_cartesian(xlim = c(min(df_in_tcc$lon),max(df_in_tcc$lon)), ylim = c(minlat,max(df_in_tcc$lat)))+
+  theme_and_labs+
+  labs(title="Relative (rh98) canopy heights")+
+  scale_color_h_can 
+```
+
+
+# Look at facet maps of height by all tree cover and snow cover classes; heights in tundra can be removed using the tcc=NA flag 
+
+```{r fig.height=4, fig.width=4}
+# Height for tcc bins and ATL snow cover classes
+map_facets_ht_tcc_snow = worldmap + 
+  map_height +
+  coord_map("ortho", orientation = c(mean(df$lat), mean(df$lon), 0))+
+  facet_grid(seg_snow~tcc_bin)+
+  coord_cartesian(xlim = c(min(df$lon),max(df$lon)), ylim = c(minlat,max(df$lat)))+
+  theme_and_labs+
+  labs(title="Relative (rh98) canopy heights")+
+  scale_color_h_can 
+ggsave(plot = map_facets_ht_tcc_snow,
+         file = paste0(main_dir,"/",plots_dir,"/", "map_facets_ht_tcc_snow_",format(Sys.time(), "_%Y%m%d_%H%M"),".png"),
+         device = 'png', dpi = 300, width = 20, height = 10) 
+# Zomm in?
+map_zoom = worldmap + 
+  map_height +
+  coord_map("ortho", orientation = c(mean(df$lat), mean(df$lon), 0))
+  #facet_grid(seg_snow~tcc_flg)+
+  if(continent == 'eu'){
+  map_zoom = map_zoom + coord_cartesian(ylim=c(66.6,69.5), xlim=c(-138.5, -131.5))
+  }else{
+   map_zoom = map_zoom + coord_cartesian(ylim=c(67.6,70.6), xlim=c(94, 101))
+  }
+  
+  #coord_cartesian(xlim = c(min(df$lon),max(df$lon)), ylim = c(minlat,max(df$lat)))+
+  #theme_and_labs+
+  map_zoom = map_zoom + labs(title="Relative (rh98) canopy heights", subtitle = "Mackenzie Delta")+
+  scale_color_h_can+
+  theme_classic() 
+#print(map_zoom)
+ggsave(plot = map_zoom,
+         file = paste0(main_dir,"/",plots_dir,"/", "map_zoom_",format(Sys.time(), "_%Y%m%d_%H%M"),".png"),
+         device = 'png', dpi = 300, width = 4, height = 4) 
+
+```
+
+```{r}
+mp = grid.arrange(grobs = list(hist_ncanpho_night_flg_tcc, hist_snr_night_flg, hist_ht_tcc_snow, map_facets_ht_tcc_snow, map_conts_ortho_rh98+theme(legend.position = "none")),
+              layout_matrix = rbind(c(1,2,2,3,3,3,3),c(1,5,5,4,4,4,4) )) 
+ggsave(plot = mp,
+         file = paste0(main_dir,"/",plots_dir,"/", "mp_",format(Sys.time(), "_%Y%m%d_%H%M"),".png"),
+         device = 'png', dpi = 300, width = 20, height = 10) 
+```
+
+```{r}
+# mp2 = grid.arrange(grobs = list(hist_ncanpho_night_flg_tcc, map_conts_ortho_rh50, hist_ht_tcc_snow, map_facets_ht_tcc_snow, map_conts_ortho_rh98+theme(legend.position = "none")),
+#               layout_matrix = rbind(c(1,3,3,3,3,2,2),c(1,4,4,4,4,5,5) ))
+# ggsave(plot = mp,
+#          file = paste0(main_dir,"/",plots_dir,"/", "mp2_",format(Sys.time(), "_%Y%m%d_%H%M"),".png"),
+#          device = 'png', dpi = 300, width = 20, height = 10)
+
+```
+
+```{r}
+mp3 = grid.arrange(grobs = list(hist_ncanpho_night_flg_tcc,
+                                map_conts_ortho_rh50+theme(legend.position = "none"), 
+                                hist_ht_tcc_snow, 
+                                map_facets_ht_tcc_snow, 
+                                map_conts_ortho_rh98+theme(legend.position = "none"), 
+                                map_zoom+theme(legend.position = "none")),
+              layout_matrix = rbind(c(3,3,3,3,1,2,2),
+                                    c(3,3,3,3,1,2,2),
+                                    c(4,4,4,4,1,5,5),
+                                    c(4,4,4,4,6,5,5) )) 
+ggsave(plot = mp3,
+         file = paste0(main_dir,"/",plots_dir,"/", "mp3_",format(Sys.time(), "_%Y%m%d_%H%M"),".png"),
+         device = 'png', dpi = 300, width = 20, height = 10)
+```
+
