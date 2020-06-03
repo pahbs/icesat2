@@ -5,7 +5,7 @@
 # pupsh "hostname ~ 'ecotone'" "do_icesat2.sh /path/to/file/list_mypairs"
 #
 # Get input h5 list like this:
-# find $PWD -name 'ATL08*003_01.h5' > atl08_h5_files
+# find $PWD -name 'ATL08*003_01.h5' > atl08_h5_na_files
 # Get input csv list like this:
 # find $PWD -name 'ATL08*003_01.csv' > atl08_csv_files
 
@@ -44,13 +44,13 @@ fi
 list=$(cat ${listname})
 
 echo "Running script in parallel on $list_name ..."
-if [ "$hostN" == *"ecotone"* ] ; then
+if [[ "$hostN" == *"ecotone"* ]] ; then
     echo "Activate python....."
     source ~/anaconda/bin/activate sibbork
 fi
 
 # If your input list is of the h5 files, then run this
-############parallel --progress -j $ncpu --delay 1 'extract_atl08.py -i {1} -o {2}' ::: $list ::: $outdir
+parallel --progress --delay 1 'extract_atl08.py -i {1} -o {2}' ::: $list ::: $outdir
 
 # If your input list is of the csv files, then run this
 echo "Get R going..."
@@ -61,5 +61,6 @@ module load jessie/R-3.6.1
 
 #parallel --progress --delay 1 'Rscript /home/pmontesa/code/icesat2/filter_atl08.R --atl08_csv_fn={1} --outdir={2} --filt_minlon={3} --filt_maxlon={4}' ::: $list ::: $outdir ::: $MINLON ::: $MAXLON
 
+# Next, run the merge.
 # Merge all filtered CSVs for North America
-Rscript /home/pmontesa/code/icesat2/merge_atl08.R --indir="/att/nobackup/pmontesa/userfs02/data/icesat2/atl08/v3/csv" --csv_search_str="003_01_filt_45_90_-180_-13"
+#Rscript /home/pmontesa/code/icesat2/merge_atl08.R --indir="/att/nobackup/pmontesa/userfs02/data/icesat2/atl08/v3/csv" --csv_search_str="003_01_filt_45_90_-180_-13"
