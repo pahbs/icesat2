@@ -1,0 +1,696 @@
+---
+title: "above_atl08_airborne"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(plyr)
+library(fs)
+
+```
+
+```{r}
+#
+# Functions to use with the ATL08__*__Zonal CSV files from M. Wooten
+#
+lm_eqn = function(df){
+      y=df[,1]
+      x=df[,2]
+      m = lm(y ~ x, df);
+      
+      eq <- substitute(italic(y) == a + b %.% italic(x)*","~~italic(r)^2~"="~r2, 
+           list(a = format(coef(m)[1], digits = 2), 
+                b = format(coef(m)[2], digits = 2), 
+               r2 = format(summary(m)$r.squared, digits = 3)))
+      int = format(coef(m)[1], digits = 2)
+      slope = format(coef(m)[2], digits = 2)
+      # https://stackoverflow.com/questions/43123462/how-to-obtain-rmse-out-of-lm-result
+      r2 = format(summary(m)$r.squared, digits = 2)
+      rss <- c(crossprod(m$residuals))
+      mse <- rss / length(m$residuals)
+      rmse <- format(sqrt(mse),dig=2)
+      sig2 <- format(rss / m$df.residual, dig=2) # Pearson estimated residual variance (as returned by summary.lm):
+      n <- nobs(m)
+      #return(as.character(as.expression(eq)))
+      return(data.frame(cbind(int, slope, r2, rmse, sig2, n)))
+}
+lm_mod = function(df){
+      y=df[,1]
+      x=df[,2]
+      m = lm(y ~ x, df);
+      return(m)
+}
+
+do_cover_plots = function(df, p_title, y_var, x_var){
+    # 
+  
+  pal_rev_spectral9 = c("#3288BD","#66C2A5","#ABDDA4", "#E6F598","#FFFFBF", "#FEE08B", "#FDAE61", "#F46D43", "#D53E4F")
+  ymax = 1
+  leg_breaks = c(1,25,50)
+  leg_lims = c(min(leg_breaks), max(leg_breaks))
+  
+  val_plot_geom_list = list(
+
+          guides(colour = guide_legend(override.aes = list(alpha = 1))),
+          geom_vline(xintercept = 0, linetype = "dashed"),
+          geom_hline(yintercept = 0, linetype = "dashed"),
+          geom_abline(intercept = 0, slope = 1, "dotted"),
+          stat_smooth(method = "lm", col = "black", linetype = "dashed"),
+          scale_x_continuous(breaks = seq(0,ymax,0.1), limits = c(0,ymax)),
+          scale_y_continuous(breaks = seq(0,ymax,0.1), limits = c(0,ymax)),
+          scale_fill_gradientn( labels = leg_breaks, breaks =leg_breaks, limits = leg_lims, colours=pal_rev_spectral9, name='# obs.'),
+          theme_minimal()+theme(axis.text = element_text(size = 6)),
+          coord_fixed()
+          )
+  
+  # Assign names to categorical variables that can be used to subset data
+  df$cloud_flg = plyr::mapvalues(factor(df$cloud_flg), from = c(0,1,2,3,4,5), to=c("High conf. clear","Med conf. clear", "Low conf. clear", "Low conf. cloudy ", "Med conf. cloudy", "High conf. cloudy"))
+  df$seg_snow  = plyr::mapvalues(factor(df$seg_snow), from = c(0,1,2,3), to=c("ice free water", "snow free land","snow", "ice"))
+  df$night_flg = plyr::mapvalues(factor(df$night_flg), from = c(0,1), to=c("day","night"))
+  df$tcc_flg   = plyr::mapvalues(factor(df$tcc_flg), from = c(0,1), to=c("≤ 5%","> 5%"))
+  
+  # Create the equation labels for the two groups
+  source(paste("C:\\Users\\pmontesa\\Google Drive\\Work\\R","\\","plot_functions.R",sep=''))
+  
+  # Single plot: night_flg
+  df_eq <- ddply(df %>% dplyr::select_(y_var, x_var, "cloud_flg", "night_flg", "tcc_flg", "gt" ),.(night_flg),c("lm_eqn") )
+  df_eq$slope = as.numeric(as.character(df_eq$slope))
+  
+  p_single = ggplot(df, aes_string(y=y_var, x=x_var)) + 
+    labs(title = p_title, subtitle = paste0("Reference height: ",x_var_to)) + 
+    geom_bin2d(binwidth = c(0.025,0.025))+
+    #geom_point(alpha=0.25)+
+    labs(y=paste0("Cover (fraction); ATL08, ",y_var), x=paste0("Cover (fraction); ", x_var))+
+    val_plot_geom_list+
+    geom_text(data=df_eq, aes(x = Inf, y = 0,label=paste("r^2 ==", r2,sep='')),    inherit.aes=FALSE, parse = TRUE, hjust="inward", vjust="inward", size=sz_txt)+
+    geom_text(data=df_eq, aes(x = Inf, y = 0+3,label=paste0("rmse ==", rmse)),     inherit.aes=FALSE, parse = TRUE, hjust="inward", vjust="inward", size=sz_txt)+
+    geom_text(data=df_eq, aes(x = Inf, y = 0+3*2,label=paste0("bias ==", int)),    inherit.aes=FALSE, parse = TRUE, hjust="inward", vjust="inward", size=sz_txt)+
+    geom_text(data=df_eq, aes(x = Inf, y = 0+3*3,label=paste0("slope ==", slope)), inherit.aes=FALSE, parse = TRUE, hjust="inward", vjust="inward", size=sz_txt)+
+    geom_text(data=df_eq, aes(x = Inf, y = 0+3*4,label=paste0("n ==", n)),         inherit.aes=FALSE, parse = TRUE, hjust="inward", vjust="inward", size=sz_txt)+
+    facet_wrap(.~night_flg)+
+    theme(axis.text = element_text(size = 10), strip.text = element_text(size = 12))
+  
+  return(p_single)
+}
+
+do_height_plots = function(df, ref_name, filt_type, filt_str, y_var, x_var, outdir){
+  
+  title_info = paste0(" [ ", filt_type, " : ", filt_str," ] ")
+  outplotdir = paste0("output_",format(Sys.time(), "%Y%m%d"))
+  dir.create(path(outdir, outplotdir), showWarnings = FALSE)
+  sz_txt = 3
+
+  pal_rev_spectral9 = c("#3288BD","#66C2A5","#ABDDA4", "#E6F598","#FFFFBF", "#FEE08B", "#FDAE61", "#F46D43", "#D53E4F")
+  ymax = 25
+  leg_breaks = c(1,50,100,500)
+  leg_lims = c(min(leg_breaks), max(leg_breaks))
+  
+  val_plot_geom_list = list(
+
+          guides(colour = guide_legend(override.aes = list(alpha = 1))),
+          geom_vline(xintercept = 0, linetype = "dashed"),
+          geom_hline(yintercept = 0, linetype = "dashed"),
+          geom_abline(intercept = 0, slope = 1, "dotted"),
+          stat_smooth(method = "lm", col = "black", linetype = "dashed"),
+          scale_x_continuous(breaks = seq(0,ymax,5), limits = c(0,ymax+1)),
+          scale_y_continuous(breaks = seq(0,ymax,5), limits = c(0,ymax+1)),
+          scale_fill_gradientn( labels = leg_breaks, breaks =leg_breaks, limits = leg_lims, colours=pal_rev_spectral9, trans = "log", name='# obs.'),
+          theme_minimal()+theme(axis.text = element_text(size = 6)),
+          coord_fixed()
+          )
+
+
+  # # Multiple Scattering warning flag. The multiple scattering warning flag (ATL09 parameter msw_flag) has values from -1 to 5 where zero means no multiple scattering and 5 the greatest. If no layers were detected, then msw_flag = 0. If blowing snow is detected and its estimated optical depth is greater than or equal to 0.5, then msw_flag = 5. If the blowing snow optical depth is less than 0.5, then msw_flag = 4. If no blowing snow is detected but there are cloud or aerosol layers detected, the msw_flag assumes values of 1 to 3 based on the height of the bottom of the lowest layer: < 1 km, msw_flag = 3; 1-3 km, msw_flag = 2; > 3km, msw_flag = 1. A value of -1 indicates that the signal to noise of the data was too low to reliably ascertain the presence of cloud or blowing snow. We expect values of -1 to occur only during daylight.
+  # df$msw_flg   = mapvalues(factor(df$msw_flg), from = seq(-1,5,1), to=c("Low SNR", "No MS", "No snow; aer. > 3km", "No snow; aer. 1-3km", "No snow; aer. < 1km", "Snow; AOD<0.5", "Snow; AOD>0.5"))
+  
+  # Create the equation labels for the two groups
+  source(paste("C:\\Users\\pmontesa\\Google Drive\\Work\\R","\\","plot_functions.R",sep=''))
+  
+  # Single plot: night_flg
+  df_mods <- dlply(df %>% dplyr::select_(y_var, x_var, "msw_flg","cloud_flg", "night_flg", "tcc_flg", "gt" ), .( night_flg, msw_flg), c("lm_mod"))
+  df_eq   <- ddply(df %>% dplyr::select_(y_var, x_var, "msw_flg","cloud_flg", "night_flg", "tcc_flg", "gt" ), .( night_flg, msw_flg), c("lm_eqn") )
+  df_eq$slope = round(as.numeric(as.character(df_eq$slope)), dig=2)
+  
+  plot_ht_val_MSW = ggplot(df, aes_string(y=y_var, x=x_var)) + 
+    labs(title = paste0("Zonal stats analysis of ATL08 and ", ref_name, " : ", title_info), subtitle = paste0("Reference height: ",x_var)) + 
+    geom_bin2d(binwidth = c(0.75, 0.75))+
+    #geom_point(alpha=0.25)+
+    labs(y=paste0("Height (m); ATL08, ",y_var), x=paste0("Height (m); ", x_var))+
+    val_plot_geom_list+
+    geom_text(data=df_eq, aes(x = Inf, y = 0,label=paste("r^2 ==", r2,sep='')),    inherit.aes=FALSE, parse = TRUE, hjust="inward", vjust="inward", size=sz_txt)+
+    geom_text(data=df_eq, aes(x = Inf, y = 0+3,label=paste0("rmse ==", rmse)),     inherit.aes=FALSE, parse = TRUE, hjust="inward", vjust="inward", size=sz_txt)+
+    geom_text(data=df_eq, aes(x = Inf, y = 0+3*2,label=paste0("bias ==", int)),    inherit.aes=FALSE, parse = TRUE, hjust="inward", vjust="inward", size=sz_txt)+
+    geom_text(data=df_eq, aes(x = Inf, y = 0+3*3,label=paste0("slope ==", slope)), inherit.aes=FALSE, parse = TRUE, hjust="inward", vjust="inward", size=sz_txt)+
+    geom_text(data=df_eq, aes(x = Inf, y = 0+3*4,label=paste0("n ==", n)),         inherit.aes=FALSE, parse = TRUE, hjust="inward", vjust="inward", size=sz_txt)+
+    #facet_wrap(.~night_flg~)+
+    facet_grid(night_flg~msw_flg)+
+    theme(axis.text = element_text(size = 10), strip.text = element_text(size = 12))
+  ggsave(plot = plot_ht_val_MSW,
+         file = path(outdir,outplotdir, paste0(paste("plot_ht_val_MSW",ref_name,filt_type,y_var,x_var,sep="_"),".png")),
+         device = 'png', dpi = 300, width = 12, height = 6)
+  
+  
+  # Facet plot night_flg~gt
+  df_eq <- ddply(df %>% dplyr::select_(y_var, x_var, "cloud_flg", "night_flg", "tcc_flg", "gt","ref_tcc_bin" ),.(ref_tcc_bin, night_flg),c("lm_eqn") )
+  df_eq$slope = round(as.numeric(as.character(df_eq$slope)), dig=2)
+  
+  plot_ht_val_TCC = ggplot(df, aes_string(y=y_var, x=x_var)) + 
+    labs(title = paste0("Zonal stats analysis of ATL08 and ", ref_name, " : ", title_info), subtitle = paste0("Reference height: ", x_var)) + 
+    geom_bin2d(binwidth = c(0.75, 0.75))+
+    #geom_point(alpha=0.25)+
+    labs(y=paste0("Height (m); ATL08, ",y_var), x=paste0("Height (m); ", x_var))+
+    val_plot_geom_list+
+    geom_text(data=df_eq, aes(x = Inf, y = 0,     label=paste0("r^2 ==", r2)),     inherit.aes=FALSE, parse = TRUE, hjust="inward", vjust="inward", size=sz_txt)+
+    geom_text(data=df_eq, aes(x = Inf, y = 0+3,   label=paste0("rmse ==", rmse)),  inherit.aes=FALSE, parse = TRUE, hjust="inward", vjust="inward", size=sz_txt)+
+    geom_text(data=df_eq, aes(x = Inf, y = 0+3*2, label=paste0("bias ==", int)),   inherit.aes=FALSE, parse = TRUE, hjust="inward", vjust="inward", size=sz_txt)+
+    geom_text(data=df_eq, aes(x = Inf, y = 0+3*3, label=paste0("slope ==", slope)),inherit.aes=FALSE, parse = TRUE, hjust="inward", vjust="inward", size=sz_txt)+
+    geom_text(data=df_eq, aes(x = Inf, y = 0+3*4, label=paste0("n ==", n)),        inherit.aes=FALSE, parse = TRUE, hjust="inward", vjust="inward", size=sz_txt)+
+    facet_grid(night_flg~ref_tcc_bin)+
+    theme(axis.text = element_text(size = 10), strip.text = element_text(size = 12))
+    ggsave(plot = plot_ht_val_TCC,
+         file = path(outdir,outplotdir, paste0(paste("plot_ht_val_TCC",ref_name,filt_type,y_var,x_var,sep="_"),".png")),
+         device = 'png', dpi = 300, width = 12, height = 6)
+      
+  return(list(plot_ht_val_MSW,plot_ht_val_TCC))
+}
+
+# 
+pal_ht    <- colorRampPalette(c('#636363','#fc8d59','#fee08b','#ffffbf','#d9ef8b','#91cf60','#1a9850'))(20)
+
+```
+
+
+```{r}
+atl08_dir = "D:/projects/above_icesat2/atl08"
+
+# Read un main ATL08 filtered file for North America
+if(!exists("df_atl08")){
+  df_atl08 = read.csv(path(atl08_dir, "v3", "ATL08_merged_003_01_filt_45_90_-180_-13.csv"))
+}
+dim(df_atl08)
+
+# Read in Zonal Stats files
+dir_zonal = "D:\\projects\\3dsi\\ZonalStats\\"
+df_atl08_gliht_in = read.csv(path(dir_zonal, "ATL08__GLIHT__ZonalStats.csv"))
+df_atl08_lvis_in  = read.csv(path(dir_zonal, "ATL08__LVIS__ZonalStats.csv"))
+
+#/att/gpfsfs/briskfs01/ppl/mwooten3/3DSI/ZonalStats/README/GLiHT_layers.txt
+
+# L1: <stackName>_CHM_warp.tif
+# L2: <stackName>_tree_p10_warp.tif
+# L3: <stackName>_tree_p20_warp.tif
+# L4: <stackName>_tree_p30_warp.tif
+# L5: <stackName>_tree_p40_warp.tif
+# L6: <stackName>_tree_p50_warp.tif
+# L7: <stackName>_tree_p60_warp.tif
+# L8: <stackName>_tree_p70_warp.tif
+# L9: <stackName>_tree_p80_warp.tif
+# L10: <stackName>_tree_p90_warp.tif
+# L11: <stackName>_tree_p100_warp.tif
+# L12: <stackName>_tree_fcover_warp.tif
+# L13: <stackName>_slope_warp.tif
+# L14: <stackName>_aspect_warp.tif
+# L15: NA_standage_v2_warp.tif
+# L16: NA_focal_stats_std_v2_warp.tif
+# L17: NA_focal_stats_mask_v2_warp.tif
+# L18: <stackName>_LS7_CC_warp.tif
+# L19: MCD12Q1_A2017001_LC_Type1_warp.tif
+# L20: boreal_clust_25_100_2019_10_8_warp.tif
+# L21: PCA_NaN_1_093019_warp.tif
+# L22: PCA_NaN_2_093019_warp.tif
+# L23: PCA_NaN_3_093019_warp.tif
+# L24: wc2.0_bio_30s_01_warp.tif
+# L25: wc2.0_bio_30s_10_warp.tif
+# L26: wc2.0_bio_30s_18_warp.tif
+# L27: UiO_PEX_PERPROB_3.0_20171201_2000_2016_warp.tif
+# L28: BDTICM_M_250m_warp.tif
+
+#/att/gpfsfs/briskfs01/ppl/mwooten3/3DSI/ZonalStats/README/LVIS_layers.txt
+
+# L1: <stackName>_RH010_mean_15m_warp.tif
+# L2: <stackName>_RH020_mean_15m_warp.tif
+# L3: <stackName>_RH030_mean_15m_warp.tif
+# L4: <stackName>_RH040_mean_15m_warp.tif
+# L5: <stackName>_RH050_mean_15m_warp.tif
+# L6: <stackName>_RH060_mean_15m_warp.tif
+# L7: <stackName>_RH070_mean_15m_warp.tif
+# L8: <stackName>_RH080_mean_15m_warp.tif
+# L9: <stackName>_RH090_mean_15m_warp.tif
+# L10: <stackName>_RH098_mean_15m_warp.tif
+# L11: <stackName>_retge_1p37_15m_warp.tif
+# L12: <stackName>_ZG_mean_15m_slope_warp.tif
+# L13: <stackName>_ZG_mean_15m_aspect_warp.tif
+# L14: NA_standage_v2_warp.tif
+# L15: NA_focal_stats_std_v2_warp.tif
+# L16: NA_focal_stats_mask_v2_warp.tif
+# L17: <stackName>_LS7_CC_warp.tif
+# L18: C2C_change_year_warp.tif
+# L19: C2C_change_type_warp.tif
+# L20: MCD12Q1_A2017001_LC_Type1_warp.tif
+# L21: boreal_clust_25_100_2019_10_8_warp.tif
+# L22: PCA_NaN_1_093019_warp.tif
+# L23: PCA_NaN_2_093019_warp.tif
+# L24: PCA_NaN_3_093019_warp.tif
+# L25: wc2.0_bio_30s_01_warp.tif
+# L26: wc2.0_bio_30s_10_warp.tif
+# L27: wc2.0_bio_30s_18_warp.tif
+# L28: UiO_PEX_PERPROB_3.0_20171201_2000_2016_warp.tif
+# L29: BDTICM_M_250m_warp.tif
+
+
+#
+# Data cleaning: GLiHT
+#
+#Handle no data
+df_atl08_gliht_in[df_atl08_gliht_in == -99] <- NA
+# Set col names
+names(df_atl08_gliht_in)[grep(".median", names(df_atl08_gliht_in))][1:12] = c("CHM.median", paste0("rh", seq(10,100,10), ".median"), "tcc1.37.median")
+df_atl08_gliht_in$ref_ht = df_atl08_gliht_in$rh100.median
+df_atl08_gliht_in$ref_tcc = df_atl08_gliht_in$tcc1.37.median * 100
+df_atl08_gliht_in$lidar_name = "GLiHT"
+
+# Data cleaning: LVIS
+#
+#Handle no data
+
+# Set col names
+names(df_atl08_lvis_in)[grep(".median", names(df_atl08_lvis_in))][1:11] = c(paste0("rh", c(seq(10,90,10), 95), ".median"), "tcc1.37.median")
+df_atl08_lvis_in$ref_ht = df_atl08_lvis_in$rh98.median
+df_atl08_lvis_in$ref_tcc = as.numeric(as.character(df_atl08_lvis_in$tcc1.37.median))
+df_atl08_lvis_in$lidar_name = "LVIS"
+
+#
+# Combine GLiHT and LVIS
+#
+df_atl08_LIDAR = rbind(df_atl08_gliht_in %>% 
+                         dplyr::select(ref_ht, ref_tcc, h_can ,lat, lon, d, m, yr, gt, n_toc_ph, ter_slp, h_te_unc, cloud_flg, seg_snow, night_flg, msw_flg, tcc_flg, stackName, lidar_name) %>%
+                         dplyr::mutate_at(vars(contains('flg')), funs(as.factor)),
+                       df_atl08_lvis_in  %>% 
+                         dplyr::select(ref_ht, ref_tcc, h_can ,lat, lon, d, m, yr, gt, n_toc_ph, ter_slp, h_te_unc, cloud_flg, seg_snow, night_flg, msw_flg, tcc_flg, stackName, lidar_name) %>%
+                         dplyr::mutate_at(vars(contains('flg')), funs(as.factor))
+                       ) %>%
+            dplyr::mutate_at(vars(lat, lon), funs(as.numeric))
+
+# Join new fields from filtered ATL08 not available in Maggie's Zonal db
+df_atl08_LIDAR = left_join(df_atl08_LIDAR, 
+                           df_atl08 %>% select(contains('rh'), lat, lon, asr, h_dif_ref, ter_flg, ph_rem_flg, dem_rem_flg, seg_wmask, lyr_flg), by = c("lat", "lon"))
+
+# Make treecover bins
+cc_bin=20
+df_atl08_LIDAR$ref_tcc_bin = cut(df_atl08_LIDAR$ref_tcc, seq(0,100,cc_bin), labels= as.character(seq(cc_bin,100,cc_bin)) )
+
+# Bin the reference ht values
+df_atl08_LIDAR$ref_ht_bin = cut(df_atl08_LIDAR$ref_ht, seq(0,30,1), labels= as.character(seq(1,30,1)) )
+
+# Assign names to categorical variables that can be used to subset data
+df_atl08_LIDAR$cloud_flg = mapvalues(factor(df_atl08_LIDAR$cloud_flg),from = c(0,1,2,3,4,5), to=c("High conf. clear","Med conf. clear", "Low conf. clear", "Low conf. cloudy ", "Med conf. cloudy", "High conf. cloudy"))
+df_atl08_LIDAR$seg_snow  = mapvalues(factor(df_atl08_LIDAR$seg_snow), from = c(0,1,2,3),     to=c("ice free water", "snow free land","snow", "ice"))
+df_atl08_LIDAR$night_flg = mapvalues(factor(df_atl08_LIDAR$night_flg),from = c(0,1),         to=c("day","night"))
+df_atl08_LIDAR$tcc_flg   = mapvalues(factor(df_atl08_LIDAR$tcc_flg),  from = c(0,1),         to=c("<= 5%","> 5%"))
+df_atl08_LIDAR$msw_flg   = mapvalues(factor(df_atl08_LIDAR$msw_flg), from = seq(-1,5,1), to=c("Low SNR", "No MS", "No snow; aer. > 3km", "No snow; aer. 1-3km", "No snow; aer. < 1km", "Snow; AOD<0.5", "Snow; AOD>0.5"))
+
+# Base filtering
+# Remove points with bad data
+df_atl08_LIDAR = df_atl08_LIDAR %>%
+              dplyr::filter(yr >= 2018 & yr < 2050) %>%
+              drop_na(ref_ht) %>%
+        dplyr::filter(n_toc_ph>0)%>%
+        dplyr::filter(h_can<thresh_h_can)%>%
+        dplyr::filter(h_te_unc!=max(h_te_unc))%>%
+        dplyr::filter(ter_slp!=max(ter_slp)) %>%
+        dplyr::filter(lat > 45)
+```
+
+
+
+```{r fig.width=16, fig.height=5}
+print("Number of airborne lidar validation points")
+print(dim(df_atl08_LIDAR)[1])
+df_atl08_LIDAR %>% 
+      dplyr::group_by(lidar_name, night_flg, m) %>% 
+      dplyr::summarise(n_obs = n())
+
+# Stacked histograms
+ggplot(df_atl08_LIDAR, aes(x=ref_ht, fill=as.factor(msw_flg)))+geom_histogram( position = "stack", binwidth = 2) + facet_grid(night_flg~m) + scale_fill_brewer(palette = "Set1") + theme_minimal()
+```
+
+```{r fig.height=5, fig.width=16, message=FALSE, warning=FALSE}
+COVER= FALSE
+thresh_h_can = 30
+ref_name = "LiDAR"
+p_title = paste0("Zonal stats analysis of ATL08 and ",ref_name)
+p_subtitle = "ICESat-2 ATL08 Canopy Height (m, h_can)"
+
+out_ext = '.png'
+out_ext_type = 'png'
+
+####
+# Create a seequence of facet plots based on data with different filters
+
+# Filter 1
+filt_type = "None"
+filt_str = ""
+title_info = paste0(" [ ", filt_type, " : ", filt_str," ] ")
+
+ggplot(df_atl08_LIDAR) +
+    geom_point(alpha=0.2, aes(x = lon, y = lat, col=h_can), size = 1, alpha = 0.25) +
+    scale_colour_gradientn(colors=pal_ht, limits=c(0,20), name = "Height (m)") +
+    labs(title = paste0("Zonal stats analysis of ATL08 and ", ref_name, " : ", title_info), subtitle = p_subtitle)+
+    facet_wrap(~lidar_name)+
+    theme_minimal()
+
+print(do_height_plots(df_atl08_LIDAR %>% drop_na(ref_tcc_bin, ref_ht_bin), ref_name, filt_type, filt_str, "h_can", "ref_ht", dir_zonal))
+
+# Residual boxplots
+# https://stackoverflow.com/questions/41475577/saving-residuals-of-a-regression-to-the-original-dataframe?rq=1
+
+plot_residbox_MSW = ggplot(
+      df_atl08_LIDAR %>% 
+        drop_na(ref_tcc_bin, ref_ht_bin) %>%
+        dplyr::group_by(night_flg, msw_flg) %>%
+        dplyr::mutate(resid = residuals( lm(h_can ~ ref_ht ))), 
+    aes(x=ref_ht_bin, y=resid, fill=night_flg, outlier.color=night_flg)) + 
+    labs(title = paste0("Zonal stats analysis of ATL08 and ", ref_name, " : ", title_info), subtitle = paste0("ATL08 height: ", "h_can"), y="Residuals", x="Reference height bin (m)") +
+    geom_boxplot(outlier.size = 0.5) + 
+    facet_wrap(.~msw_flg, nrow = 2) + 
+    geom_hline(aes(yintercept = 0)) + 
+    scale_y_continuous(limits = c(-20,20))+
+  scale_fill_manual(values = c("orange", "grey"))+
+  scale_color_manual(values = c("orange", "grey"))+
+    theme_minimal()+theme(axis.text = element_text(size = 6, angle = 90))#+coord_fixed()
+print(plot_residbox_MSW)
+ggsave(plot = plot_residbox_MSW,
+         file = path(dir_zonal, paste0("output_",format(Sys.time(), "%Y%m%d")), paste0(paste("plot_residbox_MSW",ref_name,filt_type,"h_can","ref_ht",sep="_"), out_ext)),
+         device = out_ext_type, dpi = 300, width = 14, height = 6)
+
+plot_residbox_TCC = ggplot(
+      df_atl08_LIDAR %>% 
+        drop_na(ref_tcc_bin, ref_ht_bin) %>%
+        dplyr::group_by(night_flg, ref_tcc_bin) %>%
+        dplyr::mutate(resid = residuals( lm(h_can ~ ref_ht ))),
+    aes(x=ref_ht_bin, y=resid, fill=night_flg, outlier.color=night_flg)) + 
+    labs(title = paste0("Zonal stats analysis of ATL08 and ", ref_name, " : ", title_info), subtitle = paste0("ATL08 height: ", "h_can"), y="Residuals", x="Reference height bin (m)") +
+    geom_boxplot(outlier.size = 0.5) + 
+    facet_wrap(.~ref_tcc_bin, nrow = 2) + 
+    geom_hline(aes(yintercept = 0)) + 
+    scale_y_continuous(limits = c(-20,20))+
+  scale_fill_manual(values = c("orange", "grey"))+
+  scale_color_manual(values = c("orange", "grey"))+
+    theme_minimal()+theme(axis.text = element_text(size = 6, angle = 90))#+coord_fixed()
+print(plot_residbox_TCC)
+ggsave(plot = plot_residbox_TCC,
+         file = path(dir_zonal, paste0("output_",format(Sys.time(), "%Y%m%d")), paste0(paste("plot_residbox_TCC",ref_name,filt_type,"h_can","ref_ht",sep="_"), out_ext)),
+         device = out_ext_type, dpi = 300, width = 14, height = 6)
+
+plot_residbox_TCC_gt = ggplot(
+      df_atl08_LIDAR %>% 
+        drop_na(ref_tcc_bin, ref_ht_bin) %>%
+        dplyr::group_by(night_flg, ref_tcc_bin, gt) %>%
+        dplyr::mutate(resid = residuals( lm(h_can ~ ref_ht ))),
+    aes(x=ref_ht_bin, y=resid, fill=night_flg, outlier.color=night_flg)) + 
+    labs(title = paste0("Zonal stats analysis of ATL08 and ", ref_name, " : ", title_info), subtitle = paste0("ATL08 height: ", "h_can"), y="Residuals", x="Reference height bin (m)") +
+    geom_boxplot(outlier.size = 0.5) + 
+    facet_grid(gt~ref_tcc_bin) + 
+    geom_hline(aes(yintercept = 0)) + 
+    scale_y_continuous(limits = c(-20,20))+
+  scale_fill_manual(values = c("orange", "grey"))+
+  scale_color_manual(values = c("orange", "grey"))+
+    theme_minimal()+theme(axis.text = element_text(size = 6, angle = 90))#+coord_fixed()
+print(plot_residbox_TCC_gt)
+ggsave(plot = plot_residbox_TCC_gt,
+         file = path(dir_zonal, paste0("output_",format(Sys.time(), "%Y%m%d")), paste0(paste("plot_residbox_TCC_gt",ref_name,filt_type,"h_can","ref_ht",sep="_"), out_ext)),
+         device = out_ext_type, dpi = 300, width = 16, height = 10)
+#```
+
+#```{r fig.height=5, fig.width=16, message=FALSE, warning=FALSE}
+# Filter 2
+filt_type = "DOY"
+filt_str = "d > 150 & d < 255"
+title_info = paste0(" [ ", filt_type, " : ", filt_str," ] ")
+df_atl08_LIDAR_FILT = df_atl08_LIDAR %>% dplyr::filter_(filt_str) # June - mid-Sept
+
+ggplot(df_atl08_LIDAR_FILT) +
+    geom_point(alpha=0.2, aes(x = lon, y = lat, col=h_can), size = 1, alpha = 0.25) +
+    scale_colour_gradientn(colors=pal_ht, limits=c(0,20), name = "Height (m)") +
+    labs(title = paste0("Zonal stats analysis of ATL08 and ", ref_name, " : ", title_info), subtitle = p_subtitle)+
+    facet_wrap(~lidar_name)+
+    theme_minimal()
+
+print(do_height_plots(df_atl08_LIDAR_FILT %>% drop_na(ref_tcc_bin, ref_ht_bin), ref_name, filt_type, filt_str, "h_can", "ref_ht", dir_zonal))
+
+# Residual boxplots
+# https://stackoverflow.com/questions/41475577/saving-residuals-of-a-regression-to-the-original-dataframe?rq=1
+
+plot_residbox_MSW = ggplot(
+      df_atl08_LIDAR_FILT %>% 
+        drop_na(ref_tcc_bin, ref_ht_bin) %>%
+        dplyr::group_by(night_flg, msw_flg) %>%
+        dplyr::mutate(resid = residuals( lm(h_can ~ ref_ht ))),
+    aes(x=ref_ht_bin, y=resid, fill=night_flg, outlier.color=night_flg)) + 
+    labs(title = paste0("Zonal stats analysis of ATL08 and ", ref_name, " : ", title_info), subtitle = paste0("ATL08 height: ", "h_can"), y="Residuals", x="Reference height bin (m)") +
+    geom_boxplot(outlier.size = 0.5) + 
+    facet_wrap(.~msw_flg, nrow = 2) + 
+    geom_hline(aes(yintercept = 0)) + 
+  scale_fill_manual(values = c("orange", "grey"))+
+  scale_color_manual(values = c("orange", "grey"))+
+    scale_y_continuous(limits = c(-20,20))+
+    theme_minimal()+theme(axis.text = element_text(size = 6, angle = 90))#+coord_fixed()
+print(plot_residbox_MSW)
+ggsave(plot = plot_residbox_MSW,
+         file = path(dir_zonal, paste0("output_",format(Sys.time(), "%Y%m%d")), paste0(paste("plot_residbox_MSW",ref_name,filt_type,"h_can","ref_ht",sep="_"), out_ext)),
+         device = out_ext_type, dpi = 300, width = 14, height = 6)
+
+plot_residbox_TCC = ggplot(
+      df_atl08_LIDAR_FILT %>% 
+        drop_na(ref_tcc_bin, ref_ht_bin) %>%
+        dplyr::group_by(night_flg, ref_tcc_bin) %>%
+        dplyr::mutate(resid = residuals( lm(h_can ~ ref_ht ))),
+    aes(x=ref_ht_bin, y=resid, fill=night_flg, outlier.color=night_flg)) + 
+    labs(title = paste0("Zonal stats analysis of ATL08 and ", ref_name, " : ", title_info), subtitle = paste0("ATL08 height: ", "h_can"), y="Residuals", x="Reference height bin (m)") +
+    geom_boxplot(outlier.size = 0.5) + 
+    facet_wrap(.~ref_tcc_bin, nrow = 2) + 
+    geom_hline(aes(yintercept = 0)) + 
+  scale_fill_manual(values = c("orange", "grey"))+
+  scale_color_manual(values = c("orange", "grey"))+
+    scale_y_continuous(limits = c(-20,20))+
+    theme_minimal()+theme(axis.text = element_text(size = 6, angle = 90))#+coord_fixed()
+print(plot_residbox_TCC)
+ggsave(plot = plot_residbox_TCC,
+         file = path(dir_zonal, paste0("output_",format(Sys.time(), "%Y%m%d")), paste0(paste("plot_residbox_TCC",ref_name,filt_type,"h_can","ref_ht",sep="_"),out_ext)),
+         device = out_ext_type, dpi = 300, width = 14, height = 6)
+
+plot_residbox_TCC_gt = ggplot(
+      df_atl08_LIDAR_FILT %>% 
+        drop_na(ref_tcc_bin, ref_ht_bin) %>%
+        dplyr::group_by(night_flg, ref_tcc_bin, gt) %>%
+        dplyr::mutate(resid = residuals( lm(h_can ~ ref_ht ))),
+    aes(x=ref_ht_bin, y=resid, fill=night_flg, outlier.color=night_flg)) + 
+    labs(title = paste0("Zonal stats analysis of ATL08 and ", ref_name, " : ", title_info), subtitle = paste0("ATL08 height: ", "h_can"), y="Residuals", x="Reference height bin (m)") +
+    geom_boxplot(outlier.size = 0.5) + 
+    facet_grid(gt~ref_tcc_bin) + 
+    geom_hline(aes(yintercept = 0)) + 
+    scale_y_continuous(limits = c(-20,20))+
+  scale_fill_manual(values = c("orange", "grey"))+
+  scale_color_manual(values = c("orange", "grey"))+
+    theme_minimal()+theme(axis.text = element_text(size = 6, angle = 90))#+coord_fixed()
+print(plot_residbox_TCC_gt)
+ggsave(plot = plot_residbox_TCC_gt,
+         #file = path(dir_zonal, paste0("output_",format(Sys.time(), "%Y%m%d")), paste0(paste("plot_residbox_TCC_gt",ref_name,filt_type,"h_can","ref_ht",sep="_"),out_ext)),
+       file = paste0(dir_zonal, paste0("output_",format(Sys.time(), "%Y%m%d")), "/", paste0(paste("plot_residbox_TCC_gt",ref_name,filt_type,"h_can","ref_ht",sep="_"),out_ext) ),
+         device = out_ext_type, dpi = 300, width = 14, height = 10)
+```
+
+
+
+
+
+
+
+```{r fig.width=14}
+#
+# Get min dif NAME and VALUE of ATL08 rh metrics with LVIS rh98
+#
+# Link
+#
+# Note: ATL08 h_can --> rh98, h_max_can --> rh100
+# https://stackoverflow.com/questions/37800877/calculate-the-minimum-difference-among-the-three-column-and-give-the-correspondi?rq=1
+df_tmp = df_atl08_LIDAR_FILT %>% 
+      select(contains('rh'),h_can, ref_ht)
+
+names(df_tmp)[grep("_can", names(df_tmp))] <- c("rh98")
+
+
+df_atl08_LIDAR_FILT$min_dif_value <- as.factor(apply(df_tmp, 1, function(x) {
+  round(min(abs(x[1:10] - x[c(11)])), dig=1)
+}))
+
+df_atl08_LIDAR_FILT$min_dif_name <- as.factor(apply(df_tmp, 1, function(x) {
+  names(x)[which.min(abs(x[1:10] - x[c(11)]))]
+}))
+
+
+df_atl08_LIDAR_FILT$min_dif_name = factor(df_atl08_LIDAR_FILT$min_dif_name, levels =c("rh25","rh50","rh60","rh70","rh75","rh80","rh85","rh90", "rh95","rh98")) #, "rh100"
+ggplot(df_atl08_LIDAR_FILT, aes(x=as.numeric(min_dif_value))) + geom_histogram(binwidth = 0.5) + labs(title) + facet_wrap(~ref_tcc_bin)
+ggplot(df_atl08_LIDAR_FILT, aes(x=min_dif_name, fill=min_dif_name)) + geom_histogram(stat = "count") + labs(title) + scale_fill_brewer(palette = "Spectral", direction=-1) + facet_wrap(~ref_tcc_bin)
+
+labs_val_plots =  labs(
+      title = "Validation of forest height from ATL08", 
+      y = "Forest height (m, ATL08)",
+      x = "Forest height (m, LVIS rh98)", 
+      caption = "Facets: (horizontal) RH metric from LVIS of minimum dz with ATL08 estimate & (vertical) tree cover interval" ,
+      subtitle = paste0("For minimum dz LVIS RH metrics across tree cover intervals ",
+                        "\n# samples (", 1*100,"% of total): ", format(dim(df_atl08_LIDAR_FILT)[1], big.mark=",") )
+       )
+text_options = theme(
+          legend.title = element_text(size = 14),
+          legend.text  = element_text(size = 14), 
+          axis.text    = element_text(size = 13),
+          strip.text   = element_text(size = 14), 
+          axis.title   = element_text(size = 14), 
+          plot.title   = element_text(size = 16),
+          plot.subtitle= element_text(size = 15, hjust=0, face="italic", color="black")
+          )
+p_scatmatrix_atl08_LIDAR = ggplot(df_atl08_LIDAR_FILT %>% drop_na(ref_tcc_bin), aes(y=h_can, x=ref_ht)) + 
+  labs_val_plots +
+  #geom_hex(bins=20) + 
+  theme_minimal() + 
+  scale_y_continuous(limits = ylims)+
+  scale_x_continuous(limits = xlims)+
+  #geom_point(alpha=0.05)+
+  geom_bin2d(binwidth = c(1, 1))+
+  geom_smooth(method = "lm", se=FALSE, color="black", formula = y ~ x, size=1) +
+  #geom_text_lm +
+  #geom_text(data=df_eq, aes(x = quantile(xlims, probs=.5, names=F), y = quantile(ylims, probs=.8, names=F),label=paste0("n ==",n)), parse = TRUE, hjust=0.5, vjust=0, size=3)+
+  scale_fill_gradientn( breaks=c(1,10,100,1000), colours=pal_rev_spectral9, trans = "log", name='# obs.')+
+  geom_abline(alpha=0.5)+
+  facet_grid(ref_tcc_bin~min_dif_name)+
+  coord_equal()+
+  text_options
+print(p_scatmatrix_atl08_LIDAR)
+
+ggsave(plot = p_scatmatrix_atl08_LIDAR,
+         file = path(dir_zonal, paste0("output_",format(Sys.time(), "%Y%m%d")), paste0(paste("p_scatmatrix_atl08_LIDAR",ref_name,filt_type,"h_can","ref_ht",sep="_"),out_ext)),
+         device = out_ext_type, dpi = 300, width = 8, height = 8)
+
+# ggplot(df_atl08_LIDAR_FILT %>% drop_na(ref_tcc_bin), aes(x=ref_ht ) ) + geom_histogram() +
+#     facet_grid(ref_tcc_bin~min_dif_name)+
+#   text_options
+
+
+```
+
+```{r}
+# Exploratory nonsense
+# h_dif_ref vs asr   
+ggplot(sample_frac(df_atl08_LIDAR %>% filter(abs(h_dif_ref) < 10), 0.1),           aes(x=h_can-rh95, y=h_dif_ref, color=h_dif_ref)) + geom_point(alpha=1) + scale_colour_gradient2() + facet_wrap(~ref_tcc_bin)
+ggplot(sample_frac(df_atl08_LIDAR %>% filter(abs(h_dif_ref) < 10 & asr < 1), 0.1), aes(x=h_can-rh95, y=asr,       color=h_dif_ref)) + geom_point(alpha=0.2) + scale_colour_gradient2() + facet_wrap(~ref_tcc_bin)
+ggplot(sample_frac(df_atl08_LIDAR %>% filter(abs(h_dif_ref) < 10 & asr < 1), 0.1), aes(x=h_can-rh95, y=h_te_unc,  color=h_dif_ref)) + geom_point(alpha=0.2) + scale_colour_gradient2() + facet_wrap(~ref_tcc_bin)
+ggplot(sample_frac(df_atl08_LIDAR, 0.5),aes(x=d, fill=as.factor(msw_flg))) + geom_histogram(position="stack") + scale_colour_gradient2() + facet_wrap(~ref_tcc_bin) + coord_polar() + scale_x_continuous(breaks = seq(0,360,30))
+ggplot(sample_frac(df_atl08_LIDAR, 1),aes(x=m+0.5, fill=as.factor(msw_flg))) + geom_histogram(position="stack") + scale_colour_gradient2() + facet_wrap(~yr) + coord_polar(theta = "x") + scale_x_continuous(breaks = seq(1,12,1))
+```
+
+
+
+```{r fig.height=5, fig.width=14, message=FALSE, warning=FALSE}
+
+# COVER= TRUE
+# thresh_h_can = 30
+# ref_name = "GLiHT"
+# p_title = paste0("Zonal stats analysis of ATL08 and ",ref_name)
+# p_subtitle = "ICESat-2 ATL08 Canopy Height (m, h_can)"
+# 
+# 
+# 
+# # Sample the data
+# df_atl08_gliht = sample_frac(df_atl08_gliht, 1)
+# print(dim(df_atl08_gliht))
+# 
+# 
+# 
+# # Setup tcc
+# df_atl08_gliht$tcc_prc_air = 100 * df_atl08_gliht$tcc1.37.median
+# 
+# # Make treecover classes
+# cc_bin=20
+# df_atl08_gliht$tcc_bin_air = cut(df_atl08_gliht$tcc_prc_air, seq(0,100,cc_bin), labels= as.character(seq(cc_bin,100,cc_bin)) )
+# 
+# # Base filtering
+# df_atl08_gliht = df_atl08_gliht %>%
+#     # Filter ATL08 data
+#         dplyr::filter(n_toc_ph>0)%>%
+#         dplyr::filter(h_can<thresh_h_can)%>%
+#         dplyr::filter(h_te_unc!=max(h_te_unc))%>%
+#         dplyr::filter(ter_slp!=max(ter_slp)) %>%
+#         dplyr::filter(lat > 45)
+# # Bin the reference rh100 values
+# df_atl08_gliht$rh100.median_bin = cut(df_atl08_gliht$rh100.median, seq(0,30,1), labels= as.character(seq(1,30,1)) )
+# 
+# ####
+# # Create a seequence of facet plots based on data with different filters
+# 
+# # Filter 1
+# filt_type = "None"
+# filt_str = ""
+# title_info = paste0(" [ ", filt_type, " : ", filt_str," ] ")
+# ggplot(df_atl08_gliht) +
+#     geom_point(alpha=0.2, aes(x = lon, y = lat, col=h_can), size = 1, alpha = 0.25) +
+#     scale_colour_gradientn(colors=pal_ht, limits=c(0,20), name = "Height (m)") +
+#     labs(title = subset_title, subtitle = p_subtitle)
+# print(dim(df_atl08_gliht))
+# print(do_height_plots(df_atl08_gliht, ref_name, filt_type, filt_str, "h_can", "rh100.median", dir_zonal))
+# 
+# # Residual boxplots
+# # https://stackoverflow.com/questions/41475577/saving-residuals-of-a-regression-to-the-original-dataframe?rq=1
+# df_atl08_gliht = df_atl08_gliht %>% 
+#     #dplyr::select("h_can", "rh100.median", "msw_flg","cloud_flg", "night_flg", "tcc_flg", "gt","tcc_bin_air", "rh100.median_bin" ) %>%
+#     drop_na_(x_var) %>%
+#     dplyr::group_by(night_flg, msw_flg) %>%
+#     dplyr::mutate(resid = residuals( lm(h_can ~ rh100.median )))
+# plot_residbox_MSW = ggplot(df_atl08_gliht, aes(x=rh100.median_bin, y=resid)) + 
+#     labs(title = paste0("Zonal stats analysis of ATL08 and ", ref_name, " : ", title_info), subtitle = paste0("Reference height: ", x_var), y="Residuals", x="Reference height bin (m)") +
+#     geom_boxplot() + 
+#     facet_grid(night_flg~msw_flg) + 
+#     geom_hline(aes(yintercept = 0)) + 
+#     theme_minimal()+theme(axis.text = element_text(size = 6, angle = 90))#+coord_fixed()
+# print(plot_residbox_MSW)
+# # ggsave(plot = plot_residbox_MSW,
+# #          file = path(outdir, paste0("output_",format(Sys.time(), "_%Y%m%d")), paste0(paste("plot_residbox_MSW",ref_name,filt_type,"h_can","rh100.median",sep="_"),".png")),
+# #          device = 'png', dpi = 300, width = 14, height = 6)
+# # Filter 2
+# filt_type = "DOY"
+# filt_str = "d > 150 & d < 255"
+# title_info = paste0(" [ ", filt_type, " : ", filt_str," ] ")
+# df_atl08_gliht_tmp = df_atl08_gliht %>% dplyr::filter_(filt_str) # June - mid-Sept
+# 
+# ggplot(df_atl08_gliht_tmp) +
+#     geom_point(alpha=0.2, aes(x = lon, y = lat, col=h_can), size = 1, alpha = 0.25) +
+#     scale_colour_gradientn(colors=pal_ht, limits=c(0,20), name = "Height (m)") +
+#     labs(title = paste0(p_title, " [ ", filt_type, " : ", filt_str," ] "), subtitle = p_subtitle)
+# print(dim(df_atl08_gliht_tmp))
+# print(do_height_plots(df_atl08_gliht_tmp, ref_name, filt_type, filt_str, "h_can", "rh100.median", dir_zonal))
+# # Residual boxplots
+# # https://stackoverflow.com/questions/41475577/saving-residuals-of-a-regression-to-the-original-dataframe?rq=1
+# df_atl08_gliht_tmp = df_atl08_gliht_tmp %>% 
+#     #dplyr::select("h_can", "rh100.median", "msw_flg","cloud_flg", "night_flg", "tcc_flg", "gt","tcc_bin_air", "rh100.median_bin" ) %>%
+#     drop_na_(x_var) %>%
+#     dplyr::group_by(night_flg, msw_flg) %>%
+#     dplyr::mutate(resid = residuals( lm(h_can ~ rh100.median )))
+# plot_residbox_TCC = ggplot(df_atl08_gliht, aes(x=rh100.median_bin, y=resid)) +
+#     labs(title = paste0("Zonal stats analysis of ATL08 and ", ref_name, " : ", title_info), subtitle = paste0("Reference height: ", x_var), y="Residuals", x="Reference height bin (m)") + 
+#     geom_boxplot() + 
+#     facet_grid(night_flg~tcc_bin_air) + 
+#     geom_hline(aes(yintercept = 0)) + 
+#     theme_minimal()+theme(axis.text = element_text(size = 6, angle = 90))#+coord_fixed()
+# print(plot_residbox_TCC)
+# # ggsave(plot = plot_residbox_TCC,
+# #          file = path(outdir, paste0("output_",format(Sys.time(), "_%Y%m%d")), paste0(paste("plot_residbox_TCC",ref_name,filt_type,"h_can","rh100.median",sep="_"),".png")),
+# #          device = 'png', dpi = 300, width = 14, height = 6)
+```
+
+
+
+
+
+
+
