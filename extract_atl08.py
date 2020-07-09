@@ -52,7 +52,7 @@ def ICESAT2GRD(args):
     can_h_met = []   # Relative	(RH--)	canopy height	metrics calculated	at	the	following	percentiles: 25,	50,	60,	70,	75,	80,	85,	90,	95
     h_max_can = []
     h_can = []      # 98% height of all the individual canopy relative heights for the segment above the estimated terrain surface. Relative canopy heights have been computed by differencing the canopy photon height from the estimated terrain surface.
-    
+
     n_ca_ph = []
     n_toc_ph = []
     can_open = []    # stdv of all photons classified as canopy within segment
@@ -151,7 +151,7 @@ def ICESAT2GRD(args):
         can_h_met.append(f['/' + line   + '/land_segments/canopy/canopy_h_metrics/'][...,].tolist())
         h_max_can.append(f['/' + line   + '/land_segments/canopy/h_max_canopy/'][...,].tolist())
         h_can.append(f['/' + line       + '/land_segments/canopy/h_canopy/'][...,].tolist())
-        
+
         n_ca_ph.append(f['/' + line    	+ '/land_segments/canopy/n_ca_photons/'][...,].tolist())
         n_toc_ph.append(f['/' + line   	+ '/land_segments/canopy/n_toc_photons/'][...,].tolist())
         can_open.append(f['/' + line    + '/land_segments/canopy/canopy_openness/'][...,].tolist())
@@ -173,7 +173,7 @@ def ICESAT2GRD(args):
         sig_topo.append(f['/' + line    + '/land_segments/sigma_topo/'][...,].tolist())
 
         # Terrain fields
-        n_te_ph.append(f['/' + line    	+ '/land_segments/terrain/n_te_photons/'][...,].tolist())        
+        n_te_ph.append(f['/' + line    	+ '/land_segments/terrain/n_te_photons/'][...,].tolist())
         h_te_best.append(f['/' + line   + '/land_segments/terrain/h_te_best_fit/'][...,].tolist())
         h_te_unc.append(f['/' + line    + '/land_segments/terrain/h_te_uncertainty/'][...,].tolist())
         ter_slp.append(f['/' + line     + '/land_segments/terrain/terrain_slope/'][...,].tolist())
@@ -181,13 +181,13 @@ def ICESAT2GRD(args):
         sol_az.append(f['/' + line      + '/land_segments/solar_azimuth/'][...,].tolist())
         sol_el.append(f['/' + line      + '/land_segments/solar_elevation/'][...,].tolist())
 
-    	asr.append(f['/' + line    		+ '/land_segments/asr/'][...,].tolist())    
-    	h_dif_ref.append(f['/' + line   + '/land_segments/h_dif_ref/'][...,].tolist()) 
-    	ter_flg.append(f['/' + line    	+ '/land_segments/terrain_flg/'][...,].tolist()) 
-    	ph_rem_flg.append(f['/' + line  + '/land_segments/ph_removal_flag/'][...,].tolist()) 
-    	dem_rem_flg.append(f['/' + line + '/land_segments/dem_removal_flag/'][...,].tolist()) 
-    	seg_wmask.append(f['/' + line   + '/land_segments/segment_watermask/'][...,].tolist()) 
-    	lyr_flg.append(f['/' + line    	+ '/land_segments/layer_flag/'][...,].tolist())
+        asr.append(f['/' + line    		+ '/land_segments/asr/'][...,].tolist())
+        h_dif_ref.append(f['/' + line   + '/land_segments/h_dif_ref/'][...,].tolist())
+        ter_flg.append(f['/' + line    	+ '/land_segments/terrain_flg/'][...,].tolist())
+        ph_rem_flg.append(f['/' + line  + '/land_segments/ph_removal_flag/'][...,].tolist())
+        dem_rem_flg.append(f['/' + line + '/land_segments/dem_removal_flag/'][...,].tolist())
+        seg_wmask.append(f['/' + line   + '/land_segments/segment_watermask/'][...,].tolist())
+        lyr_flg.append(f['/' + line    	+ '/land_segments/layer_flag/'][...,].tolist())
 
 
     # MW 3/31: Originally a length of 6 was hardcoded into the below calculations because the
@@ -212,7 +212,7 @@ def ICESAT2GRD(args):
     can_h_met   =np.array([can_h_met[l][k] for l in range(nLines) for k in range(len(can_h_met[l]))] )
     h_max_can   =np.array([h_max_can[l][k] for l in range(nLines) for k in range(len(h_max_can[l]))] )
     h_can       =np.array([h_can[l][k] for l in range(nLines) for k in range(len(h_can[l]))] )
-    
+
     n_ca_ph     =np.array([n_ca_ph[l][k] for l in range(nLines) for k in range(len(n_ca_ph[l]))] )
     n_toc_ph    =np.array([n_toc_ph[l][k] for l in range(nLines) for k in range(len(n_toc_ph[l]))] )
     can_open    =np.array([can_open[l][k] for l in range(nLines) for k in range(len(can_open[l]))] )
@@ -335,7 +335,7 @@ def ICESAT2GRD(args):
                     'sol_az'    :sol_az,
                     'sol_el'    :sol_el,
 
-    				'asr'		:asr,	
+    				'asr'		:asr,
     				'h_dif_ref'	:h_dif_ref,
     				'ter_flg'	:ter_flg,
     				'ph_rem_flg':ph_rem_flg,
