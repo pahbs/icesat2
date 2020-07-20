@@ -421,7 +421,12 @@ ggplot(df_atl08_LIDAR %>% drop_na(ref_ht, h_can), aes(factor(gt), fill=gt)) +
 # Save the set of observations before filtering
 write.csv(df_atl08_LIDAR, file=path(dir_zonal,"df_atl08_LIDAR.csv"))
 
+```
+
+```{r}
+#
 # Base filtering
+#
 # Remove points with bad data
 df_atl08_LIDAR_filt = df_atl08_LIDAR %>%
               #dplyr::filter(yr >= 2018 & yr < 2050) %>%
@@ -438,12 +443,7 @@ df_atl08_LIDAR_filt = df_atl08_LIDAR %>%
 # CHeck NAs after join....
 #ggplot(df_atl08_LIDAR, aes(x=factor(ter_flg), fill=lidar_name)) + geom_histogram(position = "stack", stat = "count")
 
-# Save the set of observations for validation
-write.csv(df_atl08_LIDAR_filt, file=path(dir_zonal,"df_atl08_LIDAR_filt.csv"))
-```
 
-```{r}
-  # DATA EXPLORATION
 n_lidar_filt = dim(df_atl08_LIDAR_filt %>% drop_na(ref_ht, h_can))[1]
 
 ggplot(df_atl08_LIDAR_filt, aes(factor(gt), fill=gt)) + 
@@ -454,9 +454,8 @@ ggplot(df_atl08_LIDAR_filt, aes(factor(gt), fill=gt)) +
     facet_grid(beam_type~night_flg+msw_flg)
 
 
-# df_atl08_LIDAR_filt %>% 
-#         dplyr::group_by(lidar_name, night_flg) %>% 
-#         dplyr::summarise(n_obs = n())
+# Save the set of observations for validation
+write.csv(df_atl08_LIDAR_filt, file=path(dir_zonal,"df_atl08_LIDAR_filt.csv"))
 
 ```
 
