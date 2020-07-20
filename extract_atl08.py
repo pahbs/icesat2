@@ -249,7 +249,7 @@ def ICESAT2GRD(args):
     lyr_flg		=np.array([lyr_flg[l][k] for l in range(nLines) for k in range(len(lyr_flg[l]))] )
 
 
-    print len(latitude), len(sol_el)
+    print(len(latitude), len(sol_el))
     # Default set to 100.0
     h_max_can[h_max_can>args.thresh_ht_max_can] = 0
 
