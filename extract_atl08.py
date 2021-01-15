@@ -31,6 +31,19 @@ def ICESAT2GRD(args):
     print(Name)
     print(inDir)
 
+    if args.overwrite:
+        # Overwite is True (on)
+        pass
+    else:
+        if os.path.isfile(os.path.join(outbase + '.csv')):
+            # Overwite is False (off) and file exists
+            print("FILE EXISTS AND WE'RE NOT OVERWRITING")
+            os._exit(1)
+        else:
+            # Overwite is False (off) but file DOES NOT exist
+            pass
+
+
     # open file
     f = h5py.File(H5,'r')
 
@@ -250,13 +263,15 @@ def ICESAT2GRD(args):
 
 
     print(len(latitude), len(sol_el))
-    # Default set to 100.0
+    
+    #
+    # Default set to 100.0. Set to 0 all heights above threshold
+    #
     h_max_can[h_max_can>args.thresh_ht_max_can] = 0
 
     # Get approx path center Lat
     #CenterLat = latitude[len(latitude)/2]
     CenterLat = latitude[int(len(latitude)/2)]
-
 
     # Calc args.resolution in degrees
     ellipse = [6378137.0, 6356752.314245]
@@ -272,12 +287,7 @@ def ICESAT2GRD(args):
     # Create a handy ID label for each point
     fid = np.arange(1, len(h_max_can)+1, 1)
 
-##    print('%%%%%CHECK ARRAY SIZES%%%%%%%%%%%%')
-##    print("latitude shape: ",latitude.shape)
-##    print("gt shape: ",gt.shape)
-
-
-    # Write out to a CSV
+    # Set up a dataframe
     out=pd.DataFrame({
 
                     'fid'       :fid,
@@ -344,47 +354,81 @@ def ICESAT2GRD(args):
     				'lyr_flg'	:lyr_flg
 
                      })
+    
+    # Maybe add filtering right here, instead of using 'filter_atl08.R' next?
+    # Set flag names
+    out['seg_snow'] = out['seg_snow'].map({0: "ice free water", 1: "snow free land", 2: "snow", 3: "ice"})
+    out['cloud_flg'] = out['cloud_flg'].map({0: "High conf. clear skies", 1: "Medium conf. clear skies", 2: "Low conf. clear skies", 3: "Low conf. cloudy skies", 4: "Medium conf. cloudy skies", 5: "High conf. cloudy skies"})
+    out['night_flg'] = out['night_flg'].map({0: "day", 1: "night"})
+    #out['tcc_flg'] = out['tcc_flg'].map({0: "=<5%", 1: ">5%"})
+                                         
+    # Bin tcc values                                     
+    tcc_bins = [0,10,20,30,40,50,60,70,80,90,100]
+    out['tcc_bin'] = pd.cut(out['tcc_prc'], bins=tcc_bins, labels=tcc_bins[1:])
+    
+    if args.filter_qual:
+        print('Quality Filtering...')
 
-    # Write out to a csv
-    print('Creating CSV...')
-    out.to_csv(os.path.join(outbase + '.csv'),index=False, encoding="utf-8-sig")
+        # These filters are customized for boreal 
+        out = out[ (out['h_can']    <= args.max_h_can) & 
+                   (out['n_toc_ph'] >= args.min_n_toc_ph) & 
+                   (out['h_te_unc'] != out['h_te_unc'].max()) & 
+                   (out['ter_slp']  != out['ter_slp'].max()) 
+                   (out['msw_flg']  == 0)
+                  ]
+    else:
+        print('Turned off quality filtering; do downstream.')
 
-##    # Convert the csv to a shp
-##    print('Creating SHP...')
-##    subprocess.call('ogr2ogr -s_srs EPSG:4326 -t_srs EPSG:4326 -oo X_POSSIBLE_NAMES=X -oo Y_POSSIBLE_NAMES=Y  -f "ESRI Shapefile" ' + os.path.join(outbase + '.shp') + ' ' + os.path.join(inDir, Name + '.csv'), shell=True)
-##
-##    # Convert the shp to a KMZ. NOTE: The points are so close this doesnt display well
-##    print('Creating KMZ...')
-##    subprocess.call('ogr2ogr -f "KML" ' + os.path.join(outbase + '.kmz') + ' ' + os.path.join(inDir, Name + '.shp'), shell=True)
-##
-##    #!#  Choose which var to rasterize..
-##    # +proj=aea +lat_1=50 +lat_2=70 +lat_0=40 +lon_0=-96 +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs
-##    # Rasterize the shp to approx 100m resolution
-##    print('Creating TIFF...')
-##    proj_str = str(args.out_proj4)
-##    print(proj_str)
-##    subprocess.call('gdal_rasterize' +\
-##                        ' -of GTiff' +\
-##                        ' -a ' + args.out_var + \
-##                        ' -a_nodata -999' +\
-##                        ' -tr ' + str(pixelSpacingInDegreeX) + ' ' + str(pixelSpacingInDegreeY) + \
-##                        #' -tr ' + args.resolution + ' ' + args.resolution + \
-##                        ' -a_srs EPSG:4326' +\
-##                        #' -a_srs ' + args.out_proj4 +\
-##                        ' -te ' + str(np.amin(longitude)) + ' ' + str(np.amin(latitude)) + ' ' + str(np.amax(longitude)) + ' ' + str(np.amax(latitude)) + ' ' + \
-##                        os.path.join(inDir, Name + '.shp') + ' ' + \
-##                        os.path.join(outbase + '_' + args.out_var + '_' + args.resolution + 'm' + '.tif'),shell=True)
+    if args.filter_geo:
+        print('Geographic Filtering...')        
+        # These filters are customized for boreal 
+        out = out[ (out['lon']     >= args.minlon) & 
+                   (out['lon']     <= args.maxlon) & 
+                   (out['lat']     >= args.minlat) & 
+                   (out['lat']     <= args.maxlat)
+                 ]
+    else:
+        print('Turned off geographic filtering; do downstream.')
+
+    if out.empty:
+        print('File is empty.')
+    else:
+        # Write out to a csv
+        print('Creating CSV...')
+        out.to_csv(os.path.join(outbase + '.csv'),index=False, encoding="utf-8-sig")
 
 
 def main():
     print("\nICESat2GRD is written by Nathan Thomas (@Nmt28).\nModified by Paul Montesano | paul.m.montesano@nasa.gov\nUse '-h' for help and required input parameters\n")
+                                         
+    class Range(object):
+        def __init__(self, start, end):
+            self.start = start
+            self.end = end
+        def __eq__(self, other):
+            return self.start <= other <= self.end                                             
+                                         
     parser = argparse.ArgumentParser()
     parser.add_argument("-i", "--input", type=str, help="Specify the input ICESAT H5 file")
     parser.add_argument("-r", "--resolution", type=str, default='100', help="Specify the output raster resolution (m)")
     parser.add_argument("-o", "--output", type=str, help="Specify the output directory (optional)")
-    parser.add_argument("-t", "--thresh_ht_max_can", type=float, default=100.0, help="The maximum height of valid canopy estimates" )
+    parser.add_argument("-t", "--thresh_ht_max_can", type=float, choices=[Range(0.0, 100.0)], default=100.0, help="The maximum height of valid canopy estimates" )
     parser.add_argument("-v", "--out_var", type=str, default='h_max_can', help="A selected variable to rasterize")
     parser.add_argument("-prj", "--out_epsg", type=str, default='102001', help="Out raster prj (default: Canada Albers Equal Area)")
+    parser.add_argument("--max_h_can" , type=float, choices=[Range(0.0, 100.0)], default=30.0, help="Max value of h_can to include")
+    parser.add_argument("--min_n_toc_ph" , type=int, default=1, help="Min number of top of canopy classified photons required for shot to be output")
+    parser.add_argument("--minlon" , type=float, choices=[Range(-180.0, 180.0)], default=-160.0, help="Min longitude of ATL08 shots for output to include") 
+    parser.add_argument("--maxlon" , type=float, choices=[Range(-180.0, 180.0)], default=-50.0, help="Max longitude of ATL08 shots for output to include")
+    parser.add_argument("--minlat" , type=float, choices=[Range(-90.0, 90.0)], default=45.0, help="Min latitude of ATL08 shots for output to include") 
+    parser.add_argument("--maxlat" , type=float, choices=[Range(-90.0, 90.0)], default=75.0, help="Max latitude of ATL08 shots for output to include")
+    parser.add_argument('--no-overwrite', dest='overwrite', action='store_false', help='Turn overwrite off (To help complete big runs that were interrupted)')
+    parser.set_defaults(overwrite=True)
+    parser.add_argument('--no-filter-qual', dest='filter_qual', action='store_false', help='Turn quality filtering off (To control filtering downstream)')
+    parser.set_defaults(filter_qual=True)
+    parser.add_argument('--no-filter-geo', dest='filter_geo', action='store_false', help='Turn geographic filtering off (To control filtering downstream)')
+    parser.set_defaults(filter_geo=True)
+
+
     args = parser.parse_args()
 
 
@@ -402,6 +446,12 @@ def main():
         os._exit(1)
     else:
         pass
+
+    if args.filter_geo:
+        print("Min lat: {}".format(args.minlat))
+        print("Max lat: {}".format(args.maxlat))
+        print("Min lon: {}".format(args.minlon))
+        print("Max lon: {}".format(args.maxlon))
 
     ICESAT2GRD(args)
 
