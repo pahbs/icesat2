@@ -532,6 +532,7 @@ def extract_atl08(args):
     out['tcc_bin'] = pd.cut(out['tcc_prc'], bins=tcc_bins, labels=tcc_bins[1:])
     
     if args.filter_qual:
+
         print('Quality Filtering: \t\t[ON]')
 
         import FilterUtils
@@ -539,7 +540,7 @@ def extract_atl08(args):
         # These filters are customized for boreal
         out = FilterUtils.prep_filter_atl08_qual(out)
         out = FilterUtils.filter_atl08_qual_v2(out, SUBSET_COLS=True, DO_PREP=False,
-                                                   subset_cols_list=['rh25','rh50','rh60','rh70','rh75','rh80','rh90','h_can','h_max_can','seg_landcov','night_flg','dt','orb_num'], 
+                                                   subset_cols_list=['rh25','rh50','rh60','rh70','rh75','rh80','rh90','h_can','h_max_can','seg_landcov','night_flg','seg_water','sol_el','asr','ter_slp', 'ter_flg','y','m','d'], 
                                                    filt_cols=['h_can','h_dif_ref','m','msw_flg','beam_type','seg_snow','sig_topo'], 
                                                    thresh_h_can=100, thresh_h_dif=25, thresh_sig_topo=2.5, month_min=6, month_max=9)
 

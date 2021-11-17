@@ -47,24 +47,13 @@ def prep_filter_atl08_qual(atl08):
     print(atl08.head()) 
     print(print(pd.__version__))
 
-    if False:
-        # This attempt fails
-        atl08.loc[( (atl08.orb_orient == 1 ) & (atl08.set_index('gt').filter(like='r', axis=0)) ), "beam_type"] = 'Strong'
-        atl08.loc[( (atl08.orb_orient == 1 ) & (atl08.set_index('gt').filter(like='l', axis=0)) ), "beam_type"] = 'Weak'
-        atl08.loc[( (atl08.orb_orient == 0 ) & (atl08.set_index('gt').filter(like='r', axis=0)) ), "beam_type"] = 'Weak'
-        atl08.loc[( (atl08.orb_orient == 0 ) & (atl08.set_index('gt').filter(like='l', axis=0)) ), "beam_type"] = 'Strong'
-
-
     # This always worked when running on MAAP: pandas 1.2.2
     # This doesnt work with pandas 1.3.3 or pandas 1.2.2 on ADAPT
 
-    #atl08["gt"] = atl08["gt"].astype("|S")
-    #atl08["gt_new"] = atl08["gt"].str.strip("b\'\"").astype(str)
-
-    atl08.loc[( (atl08.orb_orient == 1 ) & (atl08['gt'].str.contains('r')) ), "beam_type"] = 'Strong' 
-    atl08.loc[( (atl08.orb_orient == 1 ) & (atl08['gt'].str.contains('l')) ), "beam_type"] = 'Weak'
-    atl08.loc[( (atl08.orb_orient == 0 ) & (atl08['gt'].str.contains('r')) ), "beam_type"] = 'Weak'
-    atl08.loc[( (atl08.orb_orient == 0 ) & (atl08['gt'].str.contains('l')) ), "beam_type"] = 'Strong'
+    atl08.loc[( (atl08.orb_orient == 1 ) & (atl08['gt'].str.decode('utf-8').str.contains('r')) ), "beam_type"] = 'Strong' 
+    atl08.loc[( (atl08.orb_orient == 1 ) & (atl08['gt'].str.decode('utf-8').str.contains('l')) ), "beam_type"] = 'Weak'
+    atl08.loc[( (atl08.orb_orient == 0 ) & (atl08['gt'].str.decode('utf-8').str.contains('r')) ), "beam_type"] = 'Weak'
+    atl08.loc[( (atl08.orb_orient == 0 ) & (atl08['gt'].str.decode('utf-8').str.contains('l')) ), "beam_type"] = 'Strong'
     print(f"\tGet beam type from orbit orientation and ground track: {atl08.beam_type.unique()}")
 
 
@@ -77,9 +66,9 @@ def prep_filter_atl08_qual(atl08):
     print(f"\t\ttype integer: {cols_int}")
     atl08[cols_int] = atl08[cols_int].apply(pd.to_numeric, downcast='signed', errors='coerce')
     
-    atl08['y'] = pd.to_datetime(atl08['dt'].str.strip("b\'\"")).dt.year    
-    atl08['m'] = pd.to_datetime(atl08['dt'].str.strip("b\'\"")).dt.month
-    atl08['d'] = pd.to_datetime(atl08['dt'].str.strip("b\'\"")).dt.day
+    atl08['y'] = pd.to_datetime(atl08['dt'].str.decode('utf-8').str.strip("b\'\"")).dt.year    
+    atl08['m'] = pd.to_datetime(atl08['dt'].str.decode('utf-8').str.strip("b\'\"")).dt.month
+    atl08['d'] = pd.to_datetime(atl08['dt'].str.decode('utf-8').str.strip("b\'\"")).dt.day
           
     return(atl08)
 
