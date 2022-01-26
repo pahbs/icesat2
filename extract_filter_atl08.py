@@ -561,7 +561,7 @@ def extract_atl08(args):
     if out.empty:
         print('File is empty.')
     else:
-        if output_dataframe:
+        if args.output_dataframe:
             print(f'Returning output dataframe of shape: {out.shape}')
             return out
         else:

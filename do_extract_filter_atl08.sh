@@ -45,11 +45,19 @@ for YEAR in ${YEARS_LIST} ; do
     FILE_LIST=${FILE_LIST_STEM}_${YEAR}_${hostN}
     FILE_LIST=$(cat ${FILE_LIST})
 
-    # These bounds are good for boreal
-    ####parallel --progress 'extract_filter_atl08.py -i {1} -o {2}/{3} --minlon -180 --maxlon 180 --minlat 45 --maxlat 75 --minmonth 6 --maxmonth 9' ::: ${FILE_LIST} ::: ${OUTDIR} ::: ${YEAR}
+    if [[ "$GEO_DOMAIN" == "boreal" ]] ; then
+        # These bounds are good for boreal
+        parallel --progress 'extract_filter_atl08.py -i {1} -o {2}/{3} --minlon -180 --maxlon 180 --minlat 45 --maxlat 75 --minmonth 6 --maxmonth 9' ::: ${FILE_LIST} ::: ${OUTDIR} ::: ${YEAR}
+    fi
+    if [[ "$GEO_DOMAIN" == "senegal" ]] ; then
+        # These bounds are good for Senegal
+        parallel --progress 'extract_filter_atl08.py -i {1} -o {2}/{3} --minlon -18 --maxlon -11 --minlat 12 --maxlat 17 --minmonth 1 --maxmonth 12' ::: ${FILE_LIST} ::: ${OUTDIR} ::: ${YEAR}
+    fi
+    if [[ "$GEO_DOMAIN" == "test" ]] ; then
+        # testing...
+        parallel --progress 'extract_filter_atl08.py -i {1} -o {2}/{3} --minlon -180 --maxlon 180 --minlat 55 --maxlat 60 --minmonth 1 --maxmonth 12' ::: ${FILE_LIST} ::: ${OUTDIR} ::: ${YEAR}
+    fi
 
-    # These bounds are good for Senegal
-    parallel --progress 'extract_filter_atl08.py -i {1} -o {2}/{3} --minlon -18 --maxlon -11 --minlat 12 --maxlat 17 --minmonth 1 --maxmonth 12' ::: ${FILE_LIST} ::: ${OUTDIR} ::: ${YEAR}
 
 done
 
