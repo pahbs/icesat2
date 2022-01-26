@@ -93,8 +93,8 @@ def extract_atl08(args):
     n_ca_ph = []
     n_toc_ph = []
     can_open = []    # stdv of all photons classified as canopy within segment
-    tcc_flg = [] # Flag indicating that more than 50% of the Landsat Continuous Cover product have values > 100 for the L-Km segment.  Canopy is assumed present along the L-km segment if landsat_flag is 1.
-    tcc_prc = [] # Average percentage value of the valid (value <= 100) Landsat Tree Cover Continuous Fields product for each 100 m segment
+    #tcc_flg = [] # Flag indicating that more than 50% of the Landsat Continuous Cover product have values > 100 for the L-Km segment.  Canopy is assumed present along the L-km segment if landsat_flag is 1.
+    #tcc_prc = [] # Average percentage value of the valid (value <= 100) Landsat Tree Cover Continuous Fields product for each 100 m segment
 
     # Uncertainty fields
     n_seg_ph = []   # Number of photons within each land segment.
@@ -216,8 +216,8 @@ def extract_atl08(args):
             n_ca_ph.append(f['/' + line     + '/land_segments/30m_segment/n_ca_photons/'][...,].tolist())
             n_toc_ph.append(f['/' + line    + '/land_segments/30m_segment/n_toc_photons/'][...,].tolist())
             can_open.append(f['/' + line    + '/land_segments/30m_segment/canopy_openness/'][...,].tolist())
-            tcc_flg.append(f['/' + line     + '/land_segments/30m_segment/landsat_flag/'][...,].tolist())
-            tcc_prc.append(f['/' + line     + '/land_segments/30m_segment/landsat_perc/'][...,].tolist())            
+            #tcc_flg.append(f['/' + line     + '/land_segments/30m_segment/landsat_flag/'][...,].tolist())
+            #tcc_prc.append(f['/' + line     + '/land_segments/30m_segment/landsat_perc/'][...,].tolist())            
         else:
             can_h_met.append(f['/' + line   + '/land_segments/canopy/canopy_h_metrics/'][...,].tolist())
             
@@ -227,8 +227,8 @@ def extract_atl08(args):
             n_ca_ph.append(f['/' + line     + '/land_segments/canopy/n_ca_photons/'][...,].tolist())
             n_toc_ph.append(f['/' + line    + '/land_segments/canopy/n_toc_photons/'][...,].tolist())
             can_open.append(f['/' + line    + '/land_segments/canopy/canopy_openness/'][...,].tolist())
-            tcc_flg.append(f['/' + line     + '/land_segments/canopy/landsat_flag/'][...,].tolist())
-            tcc_prc.append(f['/' + line     + '/land_segments/canopy/landsat_perc/'][...,].tolist())
+            #tcc_flg.append(f['/' + line     + '/land_segments/canopy/landsat_flag/'][...,].tolist())
+            #tcc_prc.append(f['/' + line     + '/land_segments/canopy/landsat_perc/'][...,].tolist())
       
     
         # Uncertinaty fields
@@ -310,8 +310,8 @@ def extract_atl08(args):
     n_ca_ph     =np.array([n_ca_ph[l][k] for l in range(nLines) for k in range(len(n_ca_ph[l]))] )
     n_toc_ph    =np.array([n_toc_ph[l][k] for l in range(nLines) for k in range(len(n_toc_ph[l]))] )
     can_open    =np.array([can_open[l][k] for l in range(nLines) for k in range(len(can_open[l]))] )
-    tcc_flg     =np.array([tcc_flg[l][k] for l in range(nLines) for k in range(len(tcc_flg[l]))] )
-    tcc_prc     =np.array([tcc_prc[l][k] for l in range(nLines) for k in range(len(tcc_prc[l]))] )
+    #tcc_flg     =np.array([tcc_flg[l][k] for l in range(nLines) for k in range(len(tcc_flg[l]))] )
+    #tcc_prc     =np.array([tcc_prc[l][k] for l in range(nLines) for k in range(len(tcc_prc[l]))] )
 
     cloud_flg   =np.array([cloud_flg[l][k] for l in range(nLines) for k in range(len(cloud_flg[l]))] )
     msw_flg     =np.array([msw_flg[l][k] for l in range(nLines) for k in range(len(msw_flg[l]))] )
@@ -448,8 +448,8 @@ def extract_atl08(args):
                     'n_ca_ph'   :n_ca_ph,
                     'n_toc_ph'  :n_toc_ph,
                     'can_open'  :can_open,
-                    'tcc_flg'   :tcc_flg,
-                    'tcc_prc'   :tcc_prc,
+                    #'tcc_flg'   :tcc_flg,
+                    #'tcc_prc'   :tcc_prc,
 
                     'cloud_flg' :cloud_flg,
                     'msw_flg'   :msw_flg,
@@ -527,9 +527,9 @@ def extract_atl08(args):
         out['night_flg'] = out['night_flg'].map({0: "day", 1: "night"})
         #out['tcc_flg'] = out['tcc_flg'].map({0: "=<5%", 1: ">5%"})
                                          
-    # Bin tcc values                                     
-    tcc_bins = [0,10,20,30,40,50,60,70,80,90,100]
-    out['tcc_bin'] = pd.cut(out['tcc_prc'], bins=tcc_bins, labels=tcc_bins[1:])
+    ## Bin tcc values                                     
+    #tcc_bins = [0,10,20,30,40,50,60,70,80,90,100]
+    #out['tcc_bin'] = pd.cut(out['tcc_prc'], bins=tcc_bins, labels=tcc_bins[1:])
     
     if args.filter_qual:
 
@@ -561,10 +561,14 @@ def extract_atl08(args):
     if out.empty:
         print('File is empty.')
     else:
-        # Write out to a csv
-        out_csv_fn = os.path.join(outbase + fn_tail)
-        print('Creating CSV: \t\t{}'.format(out_csv_fn))
-        out.to_csv(out_csv_fn,index=False, encoding="utf-8-sig")
+        if output_dataframe:
+            print(f'Returning output dataframe of shape: {out.shape}')
+            return out
+        else:
+            # Write out to a csv
+            out_csv_fn = os.path.join(outbase + fn_tail)
+            print('Creating CSV: \t\t{}'.format(out_csv_fn))
+            out.to_csv(out_csv_fn,index=False, encoding="utf-8-sig")
 
 
 def main():
@@ -609,6 +613,8 @@ def main():
     parser.set_defaults(filter_geo=True)
     parser.add_argument('--do_30m', dest='do_30m', action='store_true', help='Turn on 30m ATL08 extraction')
     parser.set_defaults(do_30m=False)
+    parser.add_argument('--output_dataframe', dest='output_dataframe', action='store_true', help='Output a pandas dataframe instead of a csv')
+    parser.set_defaults(output_dataframe=False)
     parser.add_argument('--set_flag_names', dest='set_flag_names', action='store_true', help='Set the flag values to meaningful flag names')
     parser.set_defaults(set_flag_names=False)
     parser.add_argument('--set_nodata_nan', dest='set_nodata_nan', action='store_true', help='Set output nodata to nan')
