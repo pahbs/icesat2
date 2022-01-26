@@ -2,28 +2,33 @@
 #
 # EXTRACT AND FILTER ATL08 v004 data on ADAPT
 #
-# pdsh -g ecotone,forest do_extract_filter_atl08.sh 2021 /att/gpfsfs/briskfs01/ppl/pmontesa/userfs02/data/icesat2/list_atl08.004_jjas boreal
-# pdsh -g ilab,forest do_extract_filter_atl08.sh \"2018 2019 2020 2021\" /att/gpfsfs/briskfs01/ppl/pmontesa/userfs02/data/icesat2/list_atl08.004 senegal
+# pdsh -g ecotone,forest do_extract_filter_atl08.sh 2021 /att/nobackup/pmontesa/userfs02/data/icesat2/list_atl08.004_jjas boreal
+# pdsh -g ilab,forest do_extract_filter_atl08.sh \"2018 2019 2020 2021\" /att/nobackup/pmontesa/userfs02/data/icesat2/list_atl08.005 senegal
 #
 # First, create the ATL08 v4 data list like this:
-# parallel 'ls /att/pubrepo/IceSAT-2/ATLAS/ATL08.004/{}.0[6-9].*/*h5 >> /att/gpfsfs/briskfs01/ppl/pmontesa/userfs02/data/icesat2/list_atl08.004_jjas_{}' ::: 2018 2019 2020 2021
+# parallel 'ls /att/pubrepo/IceSAT-2/ATLAS/ATL08.004/{}.0[6-9].*/*h5 >> /att/nobackup/pmontesa/userfs02/data/icesat2/list_atl08.004_jjas_{}' ::: 2018 2019 2020 2021
+# parallel 'ls /att/pubrepo/IceSAT-2/ATLAS/ATL08.005/{}*/*h5 >> /att/nobackup/pmontesa/userfs02/data/icesat2/list_atl08.005_{}' ::: 2018 2019 2020 2021
+
 # Second, chunk up by nodes
 # source activate py2
 # gen_chunks.py list_atl08.004_jjas_2021 nodes_all
 
-# has h5py and geopandas
-#source ~/anaconda3/bin/activate geopy
+# CONDA env needs h5py and geopandas
+
+module load gnu_parallel/20210422
+module load anaconda/3-2021.11
+conda activate earthml
 
 # This works but wont when something about that path changes
-module load anaconda
-source /att/gpfsfs/home/appmgr/app/anaconda/platform/x86_64/centos/7/3-2020.07/etc/profile.d/conda.sh
-conda activate geopy
+#module load anaconda
+#source /att/gpfsfs/home/appmgr/app/anaconda/platform/x86_64/centos/7/3-2020.07/etc/profile.d/conda.sh
+#conda activate geopy
 
 YEARS_LIST=${1:-"2018 2019 2020 2021"}
-FILE_LIST_STEM=${2:-'/att/gpfsfs/briskfs01/ppl/pmontesa/userfs02/data/icesat2/list_atl08.004_jjas'}
+FILE_LIST_STEM=${2:-'/att/nobackup/pmontesa/userfs02/data/icesat2/list_atl08.004_jjas'}
 
 GEO_DOMAIN=${3:-'boreal'}
-OUTDIR=${4:-'/att/gpfsfs/briskfs01/ppl/pmontesa/userfs02/data/icesat2/atl08.004'}
+OUTDIR=${4:-'/att/nobackup/pmontesa/userfs02/data/icesat2/atl08.005'}
 
 hostN=`/bin/hostname -s`
 
