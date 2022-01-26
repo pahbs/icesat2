@@ -95,6 +95,7 @@ def extract_atl08(args):
     can_open = []    # stdv of all photons classified as canopy within segment
     #tcc_flg = [] # Flag indicating that more than 50% of the Landsat Continuous Cover product have values > 100 for the L-Km segment.  Canopy is assumed present along the L-km segment if landsat_flag is 1.
     #tcc_prc = [] # Average percentage value of the valid (value <= 100) Landsat Tree Cover Continuous Fields product for each 100 m segment
+    seg_cover = [] # Average percentage value of the valid (value <= 100) Copernicus fractional cover product for each 100 m segment
 
     # Uncertainty fields
     n_seg_ph = []   # Number of photons within each land segment.
@@ -217,7 +218,9 @@ def extract_atl08(args):
             n_toc_ph.append(f['/' + line    + '/land_segments/30m_segment/n_toc_photons/'][...,].tolist())
             can_open.append(f['/' + line    + '/land_segments/30m_segment/canopy_openness/'][...,].tolist())
             #tcc_flg.append(f['/' + line     + '/land_segments/30m_segment/landsat_flag/'][...,].tolist())
-            #tcc_prc.append(f['/' + line     + '/land_segments/30m_segment/landsat_perc/'][...,].tolist())            
+            #tcc_prc.append(f['/' + line     + '/land_segments/30m_segment/landsat_perc/'][...,].tolist())
+            seg_cover.append(f['/' + line     + '/land_segments/30m_segment/segment_cover/'][...,].tolist())
+            
         else:
             can_h_met.append(f['/' + line   + '/land_segments/canopy/canopy_h_metrics/'][...,].tolist())
             
@@ -229,6 +232,7 @@ def extract_atl08(args):
             can_open.append(f['/' + line    + '/land_segments/canopy/canopy_openness/'][...,].tolist())
             #tcc_flg.append(f['/' + line     + '/land_segments/canopy/landsat_flag/'][...,].tolist())
             #tcc_prc.append(f['/' + line     + '/land_segments/canopy/landsat_perc/'][...,].tolist())
+            seg_cover.append(f['/' + line     + '/land_segments/canopy/segment_cover/'][...,].tolist())
       
     
         # Uncertinaty fields
@@ -312,6 +316,7 @@ def extract_atl08(args):
     can_open    =np.array([can_open[l][k] for l in range(nLines) for k in range(len(can_open[l]))] )
     #tcc_flg     =np.array([tcc_flg[l][k] for l in range(nLines) for k in range(len(tcc_flg[l]))] )
     #tcc_prc     =np.array([tcc_prc[l][k] for l in range(nLines) for k in range(len(tcc_prc[l]))] )
+    seg_cover    =np.array([seg_cover[l][k] for l in range(nLines) for k in range(len(seg_cover[l]))] )
 
     cloud_flg   =np.array([cloud_flg[l][k] for l in range(nLines) for k in range(len(cloud_flg[l]))] )
     msw_flg     =np.array([msw_flg[l][k] for l in range(nLines) for k in range(len(msw_flg[l]))] )
@@ -450,6 +455,7 @@ def extract_atl08(args):
                     'can_open'  :can_open,
                     #'tcc_flg'   :tcc_flg,
                     #'tcc_prc'   :tcc_prc,
+                    'seg_cover'  :seg_cover,
 
                     'cloud_flg' :cloud_flg,
                     'msw_flg'   :msw_flg,
