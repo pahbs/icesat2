@@ -36,7 +36,8 @@ def extract_atl08(args):
     
     # Get the filepath where the H5 is stored and filename
     inDir = '/'.join(H5.split('/')[:-1])
-    Name = H5.split('/')[-1].split('.')[0]
+    granule_fname = H5.split('/')[-1]
+    Name = granule_fname.split('.')[0]
 
     if args.output == None:
         outbase = os.path.join(inDir, Name)
@@ -536,6 +537,9 @@ def extract_atl08(args):
     ## Bin tcc values                                     
     #tcc_bins = [0,10,20,30,40,50,60,70,80,90,100]
     #out['tcc_bin'] = pd.cut(out['tcc_prc'], bins=tcc_bins, labels=tcc_bins[1:])
+
+    # Add granule name to table
+    out['granule_name'] = granule_fname
     
     if args.filter_qual:
 
@@ -546,7 +550,9 @@ def extract_atl08(args):
         # These filters are customized for boreal
         out = FilterUtils.prep_filter_atl08_qual(out)
         out = FilterUtils.filter_atl08_qual_v2(out, SUBSET_COLS=True, DO_PREP=False,
-                                                   subset_cols_list=['rh25','rh50','rh60','rh70','rh75','rh80','rh90','h_can','h_max_can','seg_landcov','night_flg','seg_water','sol_el','asr','ter_slp', 'ter_flg','y','m','d'], 
+                                                   subset_cols_list=['rh25','rh50','rh60','rh70','rh75','rh80','rh90','h_can','h_max_can',
+                                                                     'h_te_best','h_te_unc',
+                                                                     'seg_landcov','seg_cover','night_flg','seg_water','sol_el','asr','ter_slp', 'ter_flg','y','m','d'], 
                                                    filt_cols=['h_can','h_dif_ref','m','msw_flg','beam_type','seg_snow','sig_topo'], 
                                                    thresh_h_can=100, thresh_h_dif=25, thresh_sig_topo=2.5, month_min=args.minmonth, month_max=args.maxmonth)
 
