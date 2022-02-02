@@ -4,6 +4,7 @@
 #
 # pdsh -g ecotone,forest do_extract_filter_atl08.sh 2021 /att/nobackup/pmontesa/userfs02/data/icesat2/list_atl08.004_jjas boreal
 # pdsh -g ilab,forest do_extract_filter_atl08.sh \"2018 2019 2020 2021\" /att/nobackup/pmontesa/userfs02/data/icesat2/list_atl08.005 senegal
+# do_extract_filter_atl08.sh "2018 2019 2020 2021" /att/nobackup/pmontesa/userfs02/data/icesat2/list_atl08.005 hi_lat_na_latest
 #
 # First, create the ATL08 v4 data list like this:
 # parallel 'ls /att/pubrepo/IceSAT-2/ATLAS/ATL08.004/{}.0[6-9].*/*h5 >> /att/nobackup/pmontesa/userfs02/data/icesat2/list_atl08.004_jjas_{}' ::: 2018 2019 2020 2021
@@ -57,6 +58,11 @@ for YEAR in ${YEARS_LIST} ; do
         # testing...
         parallel --progress 'extract_filter_atl08.py -i {1} -o {2}/{3} --minlon -180 --maxlon 180 --minlat 55 --maxlat 60 --minmonth 1 --maxmonth 12' ::: ${FILE_LIST} ::: ${OUTDIR} ::: ${YEAR}
     fi
+    if [[ "$GEO_DOMAIN" == "hi_lat_na_latest" ]] ; then
+        # testing...
+        parallel --progress 'extract_filter_atl08.py -i {1} -o {2}/{3} --minlon -166 --maxlon -140 --minlat 65 --maxlat 70 --minmonth 1 --maxmonth 12' ::: ${FILE_LIST} ::: ${OUTDIR} ::: ${YEAR}
+    fi
+
 
 
 done
