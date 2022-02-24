@@ -30,6 +30,7 @@ def rec_merge1(d1, d2):
 def extract_atl08(args):
     TEST = args.TEST
     do_30m = args.do_30m
+    filter_qual = args.filter_qual
     
     # File path to ICESat-2h5 file
     H5 = args.input
@@ -48,6 +49,7 @@ def extract_atl08(args):
         print("Build in logic to this script to use v2 quality filtering from FilterUtils.py, which will work with ATL08 v3")
         print("Turning filtering off now.")
         print('Quality Filtering: \t[OFF] (you should upgrade ATL08 to v5)')
+        filter_qual = False
     
     if args.output == None:
         outbase = os.path.join(inDir, Name)
@@ -581,7 +583,7 @@ def extract_atl08(args):
     # Add granule name to table
     out['granule_name'] = granule_fname
     
-    if args.filter_qual:
+    if filter_qual:
 
         print('Quality Filtering: \t\t[ON]')
 
