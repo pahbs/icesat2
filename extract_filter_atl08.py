@@ -42,6 +42,13 @@ def extract_atl08(args):
     # Get version
     atl08_version = int(granule_fname.split('_')[-2])
     
+    if atl08_version < 5:
+        print("\nNeed ATL08 v5 or above to implement the updated v3 filtering.")
+        print("The v3 quality filtering from FilterUtils.py wants to use 'seg_cover' which is not available before ATL08 v5")
+        print("Build in logic to this script to use v2 quality filtering from FilterUtils.py, which will work with ATL08 v3")
+        print("Turning filtering off now.")
+        print('Quality Filtering: \t[OFF] (you should upgrade ATL08 to v5)')
+    
     if args.output == None:
         outbase = os.path.join(inDir, Name)
     else:
@@ -100,8 +107,8 @@ def extract_atl08(args):
     n_toc_ph = []
     can_open = []    # stdv of all photons classified as canopy within segment
     can_rh_conf = [] # Canopy relative height confidence flag based on percentage of ground and canopy photons within a segment: 0 (<5% canopy), 1 (>5% canopy, <5% ground), 2 (>5% canopy, >5% ground)
-    #tcc_flg = [] # Flag indicating that more than 50% of the Landsat Continuous Cover product have values > 100 for the L-Km segment.  Canopy is assumed present along the L-km segment if landsat_flag is 1.
-    #tcc_prc = [] # Average percentage value of the valid (value <= 100) Landsat Tree Cover Continuous Fields product for each 100 m segment
+    tcc_flg = [] # Flag indicating that more than 50% of the Landsat Continuous Cover product have values > 100 for the L-Km segment.  Canopy is assumed present along the L-km segment if landsat_flag is 1.
+    tcc_prc = [] # Average percentage value of the valid (value <= 100) Landsat Tree Cover Continuous Fields product for each 100 m segment
     seg_cover = [] # Average percentage value of the valid (value <= 100) Copernicus fractional cover product for each 100 m segment
 
     # Uncertainty fields
