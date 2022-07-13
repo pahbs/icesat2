@@ -57,6 +57,15 @@ for YEAR in ${YEARS_LIST} ; do
         # This LC h_can thresh list is good for Senegal: it gives Shrubland and Cropland a threshold of 15; otherwise same as boreal.
         parallel --progress 'extract_filter_atl08.py --list_lc_h_can_thresh 0 60 60 60 60 60 60 50 50 50 50 50 50 15 10 10 5 5 15 0 0 0 0 --i {1} -o {2}/{3} --minlon -18 --maxlon -11 --minlat 12 --maxlat 17 --minmonth 1 --maxmonth 12' ::: ${FILE_LIST} ::: ${OUTDIR} ::: ${YEAR}
     fi
+    if [[ "$GEO_DOMAIN" == "howland" ]] ; then
+        # ---NOT YET RUN OR TESTED
+        # TODO: 
+        # work in args for lc thresh and output to pandas into extract_filter_atl08_v005.py
+        # update FilterUtils to match icesat2_boreal repo version
+        # update to use the filter qual v3 from FilterUtils
+        # This LC h_can thresh list is same as boreal.
+        parallel --progress 'extract_filter_atl08_v005.py --list_lc_h_can_thresh 0 60 60 60 60 60 60 50 50 50 50 50 50 15 10 10 5 5 5 0 0 0 0 --i {1} -o {2}/{3} --minlon -18 --maxlon -11 --minlat 12 --maxlat 17 --minmonth 1 --maxmonth 12' ::: ${FILE_LIST} ::: ${OUTDIR} ::: ${YEAR}
+    fi
     if [[ "$GEO_DOMAIN" == "senegal_no_filt" ]] ; then
         # This LC h_can thresh list is good for Senegal: it gives Shrubland and Cropland a threshold of 15; otherwise same as boreal.
         parallel --progress 'extract_filter_atl08.py --no-filter-qual --i {1} -o {2}/{3} --minlon -18 --maxlon -11 --minlat 12 --maxlat 17 --minmonth 1 --maxmonth 12' ::: ${FILE_LIST} ::: ${OUTDIR} ::: ${YEAR}
@@ -65,7 +74,11 @@ for YEAR in ${YEARS_LIST} ; do
         # testing...
         parallel --progress 'extract_filter_atl08.py -i {1} -o {2}/{3} --minlon -180 --maxlon 180 --minlat 55 --maxlat 60 --minmonth 1 --maxmonth 12' ::: ${FILE_LIST} ::: ${OUTDIR} ::: ${YEAR}
     fi
-    if [[ "$GEO_DOMAIN" == "hi_lat_na_latest_no_filt" ]] ; then
+    if [[ "$GEO_DOMAIN" == "hi_lat_na" ]] ; then
+        # testing...
+        parallel --progress 'extract_filter_atl08.py -i {1} -o {2}/{3} --minlon -166 --maxlon -140 --minlat 65 --maxlat 70 --minmonth 1 --maxmonth 12' ::: ${FILE_LIST} ::: ${OUTDIR} ::: ${YEAR}
+    fi
+    if [[ "$GEO_DOMAIN" == "hi_lat_na_no_filt" ]] ; then
         # testing...
         parallel --progress 'extract_filter_atl08.py --no-filter-qual -i {1} -o {2}/{3} --minlon -166 --maxlon -140 --minlat 65 --maxlat 70 --minmonth 1 --maxmonth 12' ::: ${FILE_LIST} ::: ${OUTDIR} ::: ${YEAR}
     fi
