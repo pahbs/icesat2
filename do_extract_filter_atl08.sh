@@ -11,7 +11,7 @@
 #
 # First, create the ATL08 v4 data list like this:
 # parallel 'ls /att/pubrepo/IceSAT-2/ATLAS/ATL08.004/{}.0[6-9].*/*h5 >> /att/nobackup/pmontesa/userfs02/data/icesat2/list_atl08.004_jjas_{}' ::: 2018 2019 2020 2021
-# parallel 'ls /att/pubrepo/IceSAT-2/ATLAS/ATL08.005/{}*/*h5 >> /att/nobackup/pmontesa/userfs02/data/icesat2/list_atl08.005_{}' ::: 2018 2019 2020 2021
+# parallel 'ls /att/pubrepo/IceSAT-2/ATLAS/ATL08.005/{}*/*h5 >> /att/nobackup/pmontesa/userfs02/data/icesat2/list_atl08.005_{}' ::: 2018 2019 2020 2021 2022
 
 # Second, chunk up by nodes
 # source activate py2
@@ -29,10 +29,10 @@ conda activate earthml
 #conda activate geopy
 
 YEARS_LIST=${1:-"2018 2019 2020 2021"}
-FILE_LIST_STEM=${2:-'/att/nobackup/pmontesa/userfs02/data/icesat2/list_atl08.004_jjas'}
+FILE_LIST_STEM=${2:-'/adapt/nobackup/people/pmontesa/userfs02/data/icesat2/list_atl08.004_jjas'}
 
 GEO_DOMAIN=${3:-'boreal'}
-OUTDIR=${4:-'/att/nobackup/pmontesa/userfs02/data/icesat2/atl08.005'}
+OUTDIR=${4:-'/adapt/nobackup/people/pmontesa/userfs02/data/icesat2/atl08.005'}
 
 hostN=`/bin/hostname -s`
 
@@ -58,13 +58,9 @@ for YEAR in ${YEARS_LIST} ; do
         parallel --progress 'extract_filter_atl08.py --list_lc_h_can_thresh 0 60 60 60 60 60 60 50 50 50 50 50 50 15 10 10 5 5 15 0 0 0 0 --i {1} -o {2}/{3} --minlon -18 --maxlon -11 --minlat 12 --maxlat 17 --minmonth 1 --maxmonth 12' ::: ${FILE_LIST} ::: ${OUTDIR} ::: ${YEAR}
     fi
     if [[ "$GEO_DOMAIN" == "howland" ]] ; then
-        # ---NOT YET RUN OR TESTED
-        # TODO: 
-        # work in args for lc thresh and output to pandas into extract_filter_atl08_v005.py
-        # update FilterUtils to match icesat2_boreal repo version
-        # update to use the filter qual v3 from FilterUtils
+        # ---NOT YET RUN OR TESTED 
         # This LC h_can thresh list is same as boreal.
-        parallel --progress 'extract_filter_atl08_v005.py --list_lc_h_can_thresh 0 60 60 60 60 60 60 50 50 50 50 50 50 15 10 10 5 5 5 0 0 0 0 --i {1} -o {2}/{3} --minlon -18 --maxlon -11 --minlat 12 --maxlat 17 --minmonth 1 --maxmonth 12' ::: ${FILE_LIST} ::: ${OUTDIR} ::: ${YEAR}
+        parallel --progress 'extract_filter_atl08_v005.py --list_lc_h_can_thresh 0 60 60 60 60 60 60 50 50 50 50 50 50 15 10 10 5 5 5 0 0 0 0 --i {1} -o {2}/{3} --minlon -69 --maxlon -68 --minlat 44 --maxlat 46 --minmonth 6 --maxmonth 9' ::: ${FILE_LIST} ::: ${OUTDIR} ::: ${YEAR}
     fi
     if [[ "$GEO_DOMAIN" == "senegal_no_filt" ]] ; then
         # This LC h_can thresh list is good for Senegal: it gives Shrubland and Cropland a threshold of 15; otherwise same as boreal.
