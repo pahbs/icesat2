@@ -741,9 +741,10 @@ def extract_atl08(args):
     # 20m seg id id_20m for unique 20m IDs)
     
     if do_20m:
+        print('reformatArrays...')
         outDict = reFormatArrays(outDict)
     
-    # Create DF from dictionary
+    print('Create dataframe from dictionary...')
     out = pd.DataFrame(outDict)
   
     print("Setting pandas df nodata values to np.nan for some basic eval.")
@@ -848,18 +849,24 @@ def extract_atl08(args):
         print('Quality Filtering: \t\t[ON]')
 
         import FilterUtils
-	
+
         # These filters are customized for boreal
-        out = FilterUtils.prep_filter_atl08_qual(out)
-        out = FilterUtils.filter_atl08_qual_v2(out, SUBSET_COLS=False, DO_PREP=False,
-        subset_cols_list=['rh25','rh50','rh60','rh70','rh75','rh80','rh90',
-                          'h_can','h_max_can','h_can_quad','h_can_unc', 'h_te_best',
-                          'h_te_unc', 'granule_name','can_rh_conf', 'h_dif_ref',
-                          'seg_landcov','seg_cover','night_flg','seg_water',
-                          'sol_el','asr','ter_slp', 'ter_flg','year','month','day'], 
-        filt_cols=['h_can','h_dif_ref','month','msw_flg','beam_type','seg_snow','sig_topo'], 
-                        thresh_h_can=100, thresh_h_dif=25, thresh_sig_topo=2.5, 
-                            month_min=args.minmonth, month_max=args.maxmonth)
+        '''out = FilterUtils.prep_filter_atl08_qual(out)
+        out = FilterUtils.filter_atl08_qual_v2(out, SUBSET_COLS=True, DO_PREP=False,
+                                                   subset_cols_list=['rh25','rh50','rh60','rh70','rh75','rh80','rh90','h_can','h_max_can','h_can_quad','h_can_unc',
+                                                                     'h_te_best','h_te_unc', 'granule_name','can_rh_conf', 'h_dif_ref',
+                                                                     'seg_landcov','seg_cover','night_flg','seg_water','sol_el','asr','ter_slp', 'ter_flg','y','m','d'], 
+                                                   filt_cols=['h_can','h_dif_ref','m','msw_flg','beam_type','seg_snow','sig_topo'], 
+                                                   thresh_h_can=100, thresh_h_dif=25, thresh_sig_topo=2.5, month_min=args.minmonth, month_max=args.maxmonth)
+                                                   '''
+        print('Apply the aggressive land-cover based (v3) filters updated in Jan/Feb 2022')
+        out = FilterUtils.filter_atl08_qual_v3(out, SUBSET_COLS=True, DO_PREP=True,
+                                              subset_cols_list=['rh25','rh50','rh60','rh70','rh75','rh80','rh90','h_can','h_max_can',
+                                                                     'h_te_best','granule_name',
+                                                                     'seg_landcov','seg_cover','sol_el','y','m','doy'], 
+                                                   filt_cols=['h_can','h_dif_ref','m','msw_flg','beam_type','seg_snow','sig_topo'], 
+                                                   list_lc_h_can_thresh=args.list_lc_h_can_thresh,
+                                                   thresh_h_can=100, thresh_h_dif=25, thresh_sig_topo=2.5, month_min=args.minmonth, month_max=args.maxmonth)
     else:
         print('Quality Filtering: \t[OFF] (do downstream)')
 
@@ -877,38 +884,47 @@ def extract_atl08(args):
     if out.empty:
         print('\nFile is empty after filtering. Exiting')
         return None
-
-    #*do_20m - GET UNIQUE ID FIELDS
-    # If not doing 20m segments, unique_id = 100m segment ID
-    # If doing 20m segments, unique_id = 100m segment ID + 20m segment ID
-    # So 100m.csv will have just unique ID and 100m segment ID 
-      # (which = unique ID)
-    # 20m.csv will have unique ID, 100m seg ID, 20m seg ID
-      # (id_20m already exists as column if do_20m)
-  
-    # Start by getting 100m segment ID
-    out['id_100m'] = list(map(lambda ln, lt, dt: get100mSegId(ln, lt, dt), \
-                                            out['lon'], out['lat'], out['dt']))
-     
-    # If doing 20m segments, then unique ID is combo of id_100m and id_20m
-    if do_20m: 
-        out['id_unique'] = list(map(lambda i1, i2: \
-                        '{}-{}'.format(i1, i2), out['id_100m'], out['id_20m']))
-
-    # Otherwise, unique ID is just 100m id (yes this will add a duplicate
-    # column but it will enable a consisent unique ID column name. 
-    # un-likely to process 100m with this code anyways so w/e)
     else:
-        out['id_unique'] = out['id_100m']
 
-    # Lastly, try and reorder the columns before writing to .csv. 
-    # This part is partially hardcoded according to expected column names
-    colsOrdered = getOrderedColumns(out)
-    out = out[colsOrdered]
+        #*do_20m - GET UNIQUE ID FIELDS
+        # If not doing 20m segments, unique_id = 100m segment ID
+        # If doing 20m segments, unique_id = 100m segment ID + 20m segment ID
+        # So 100m.csv will have just unique ID and 100m segment ID 
+          # (which = unique ID)
+        # 20m.csv will have unique ID, 100m seg ID, 20m seg ID
+          # (id_20m already exists as column if do_20m)
 
-    # At this point we know out DF is not empty - Write out to csv
-    print('\nWriting {} rows to CSV: {}'.format(len(out), out_csv_fn))
-    out.to_csv(out_csv_fn,index=False, encoding="utf-8-sig")
+        # Start by getting 100m segment ID
+        out['id_100m'] = list(map(lambda ln, lt, dt: get100mSegId(ln, lt, dt), \
+                                                out['lon'], out['lat'], out['dt']))
+
+        # If doing 20m segments, then unique ID is combo of id_100m and id_20m
+        if do_20m: 
+            out['id_unique'] = list(map(lambda i1, i2: \
+                            '{}-{}'.format(i1, i2), out['id_100m'], out['id_20m']))
+
+        # Otherwise, unique ID is just 100m id (yes this will add a duplicate
+        # column but it will enable a consisent unique ID column name. 
+        # un-likely to process 100m with this code anyways so w/e)
+        else:
+            out['id_unique'] = out['id_100m']
+
+        # Lastly, try and reorder the columns before writing to .csv. 
+        # This part is partially hardcoded according to expected column names
+        colsOrdered = getOrderedColumns(out)
+        out = out[colsOrdered]
+
+        # At this point we know out DF is not empty - Write out to csv
+        print(f'\nWriting output with shape {out.shape}')
+        
+        if args.output_dataframe:
+            print(f'Returning output dataframe of shape: {out.shape}')
+            return out
+        else:
+            # Write out to a csv
+            out_csv_fn = os.path.join(outbase + fn_tail)
+            print(f'Creating CSV: \t\t{out_csv_fn}')
+            out.to_csv(out_csv_fn,index=False, encoding="utf-8-sig")
         
     print("\nEnd: {}\n".format(time.strftime("%m-%d-%y %I:%M:%S %p")))        
     calculateElapsedTime(start, time.time())
@@ -945,18 +961,21 @@ def main():
     parser.add_argument("--min_n_toc_ph" , type=int, default=1, help="Min number of top of canopy classified photons required for shot to be output")
     parser.add_argument("--minlon" , type=float, choices=[Range(-180.0, 180.0)], default=-180.0, help="Min longitude of ATL08 shots for output to include") 
     parser.add_argument("--maxlon" , type=float, choices=[Range(-180.0, 180.0)], default=180.0, help="Max longitude of ATL08 shots for output to include")
-    parser.add_argument("--minlat" , type=float, choices=[Range(-90.0, 90.0)], default=30.0, help="Min latitude of ATL08 shots for output to include") 
-    parser.add_argument("--maxlat" , type=float, choices=[Range(-90.0, 90.0)], default=90.0, help="Max latitude of ATL08 shots for output to include")
-    parser.add_argument("--minmonth" , type=int, choices=[Range(1, 12)], default=1, help="Min month of ATL08 shots for output to include")
-    parser.add_argument("--maxmonth" , type=int, choices=[Range(1, 12)], default=12, help="Max month of ATL08 shots for output to include")
+    parser.add_argument("--minlat" , type=float, choices=[Range(-90.0, 90.0)], default=45.0, help="Min latitude of ATL08 shots for output to include") 
+    parser.add_argument("--maxlat" , type=float, choices=[Range(-90.0, 90.0)], default=75.0, help="Max latitude of ATL08 shots for output to include")
+    parser.add_argument("--minmonth" , type=int, choices=[Range(1, 12)], default=6, help="Min month of ATL08 shots for output to include")
+    parser.add_argument("--maxmonth" , type=int, choices=[Range(1, 12)], default=9, help="Max month of ATL08 shots for output to include")
+    parser.add_argument("--list_lc_h_can_thresh", nargs="+", type=int, default=[0, 60, 60, 60, 60, 60, 60, 50, 50, 50, 50, 50, 50, 20, 10, 10, 5, 5, 0, 0, 0, 0, 0], help="A list of land-cover specific thresholds for h_can")
     parser.add_argument('--no-overwrite', dest='overwrite', action='store_false', help='Turn overwrite off (To help complete big runs that were interrupted)')
     parser.set_defaults(overwrite=True)
     parser.add_argument('--no-filter-qual', dest='filter_qual', action='store_false', help='Turn off quality filtering (To control filtering downstream)')
     parser.set_defaults(filter_qual=True)
     parser.add_argument('--no-filter-geo', dest='filter_geo', action='store_false', help='Turn off geographic filtering (To control filtering downstream)')
     parser.set_defaults(filter_geo=True)
-    parser.add_argument('--do_20m', dest='do_20m', action='store_true', help='Turn on 20m segment ATL08 extraction')
+    parser.add_argument('--do_20m', dest='do_20m', action='store_true', help='Turn on 20m ATL08 extraction')
     parser.set_defaults(do_20m=False)
+    parser.add_argument('--output_dataframe', dest='output_dataframe', action='store_true', help='Output a pandas dataframe instead of a csv')
+    parser.set_defaults(output_dataframe=False)
     parser.add_argument('--set_flag_names', dest='set_flag_names', action='store_true', help='Set the flag values to meaningful flag names')
     parser.set_defaults(set_flag_names=False)
     parser.add_argument('--set_nodata_nan', dest='set_nodata_nan', action='store_true', help='Set output nodata to nan')
