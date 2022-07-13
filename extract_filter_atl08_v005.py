@@ -180,9 +180,7 @@ def reFormatArrays(inDict):
         
         # 100m segment arrays need to have values multiplied
         if inArr.ndim == 1: 
-            for i in inArr:
-                for r in range(repeat):
-                    outArr = np.append(outArr, i)
+            outArr = np.repeat(inArr, repeat)
         
         # 20m segment arrays need to have their 2nd dimension flattened
         elif inArr.ndim == 2: 
@@ -741,9 +739,10 @@ def extract_atl08(args):
     # 20m seg id id_20m for unique 20m IDs)
     
     if do_20m:
+        st = time.time()
         print('reformatArrays...')
         outDict = reFormatArrays(outDict)
-    
+        calculateElapsedTime(st, time.time())
     print('Create dataframe from dictionary...')
     out = pd.DataFrame(outDict)
   
