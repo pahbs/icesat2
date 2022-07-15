@@ -63,6 +63,7 @@ import pandas as pd
 #import subprocess
 import os, sys
 import math
+import json
 
 import argparse
 
@@ -858,14 +859,22 @@ def extract_atl08(args):
                                                    filt_cols=['h_can','h_dif_ref','m','msw_flg','beam_type','seg_snow','sig_topo'], 
                                                    thresh_h_can=100, thresh_h_dif=25, thresh_sig_topo=2.5, month_min=args.minmonth, month_max=args.maxmonth)
                                                    '''
-        print('Apply the aggressive land-cover based (v3) filters updated in Jan/Feb 2022')
-        out = FilterUtils.filter_atl08_qual_v3(out, SUBSET_COLS=True, DO_PREP=True,
+        # print('Apply the aggressive land-cover based (v3) filters updated in Jan/Feb 2022')
+        # out = FilterUtils.filter_atl08_qual_v3(out, SUBSET_COLS=True, DO_PREP=True,
+        #                                       subset_cols_list=['rh25','rh50','rh60','rh70','rh75','rh80','rh90','h_can','h_max_can',
+        #                                                              'h_te_best','granule_name',
+        #                                                              'seg_landcov','seg_cover','sol_el','y','m','doy'], 
+        #                                            filt_cols=['h_can','h_dif_ref','m','msw_flg','beam_type','seg_snow','sig_topo'], 
+        #                                            list_lc_h_can_thresh=args.list_lc_h_can_thresh,
+        #                                            thresh_h_can=100, thresh_h_dif=25, thresh_sig_topo=2.5, month_min=args.minmonth, month_max=args.maxmonth)
+        print('Apply the aggressive land-cover based (v3) filters updated in Jan/Feb 2022 and use a dict of misc thresholds for other filter cols to allow for flexibility in misc filtering')
+        out = FilterUtils.filter_atl08_qual_v4(out, SUBSET_COLS=True, DO_PREP=True,
                                               subset_cols_list=['rh25','rh50','rh60','rh70','rh75','rh80','rh90','h_can','h_max_can',
                                                                      'h_te_best','granule_name',
                                                                      'seg_landcov','seg_cover','sol_el','y','m','doy'], 
                                                    filt_cols=['h_can','h_dif_ref','m','msw_flg','beam_type','seg_snow','sig_topo'], 
                                                    list_lc_h_can_thresh=args.list_lc_h_can_thresh,
-                                                   thresh_h_can=100, thresh_h_dif=25, thresh_sig_topo=2.5, month_min=args.minmonth, month_max=args.maxmonth)
+                                                   filt_dict_misc_thresh = args.dict_misc_thresh, month_min=args.minmonth, month_max=args.maxmonth)
     else:
         print('Quality Filtering: \t[OFF] (do downstream)')
 
@@ -884,29 +893,32 @@ def extract_atl08(args):
         print('\nFile is empty after filtering. Exiting')
         return None
     else:
+        # PMM edit: BUT, why do we need unique ID cols?
+        # This will fail if you do quality filtering above, b/c that function doesnt return fields needed for the uniqueID field ('id_20m')
+        if False:
+            #*do_20m - GET UNIQUE ID FIELDS
+            # If not doing 20m segments, unique_id = 100m segment ID
+            # If doing 20m segments, unique_id = 100m segment ID + 20m segment ID
+            # So 100m.csv will have just unique ID and 100m segment ID 
+              # (which = unique ID)
+            # 20m.csv will have unique ID, 100m seg ID, 20m seg ID
+              # (id_20m already exists as column if do_20m)
 
-        #*do_20m - GET UNIQUE ID FIELDS
-        # If not doing 20m segments, unique_id = 100m segment ID
-        # If doing 20m segments, unique_id = 100m segment ID + 20m segment ID
-        # So 100m.csv will have just unique ID and 100m segment ID 
-          # (which = unique ID)
-        # 20m.csv will have unique ID, 100m seg ID, 20m seg ID
-          # (id_20m already exists as column if do_20m)
+            print("\nStart by getting 100m segment ID\n")
+            print(out.head())
+            out['id_100m'] = list(map(lambda ln, lt, dt: get100mSegId(ln, lt, dt), \
+                                                    out['lon'], out['lat'], out['dt']))
 
-        # Start by getting 100m segment ID
-        out['id_100m'] = list(map(lambda ln, lt, dt: get100mSegId(ln, lt, dt), \
-                                                out['lon'], out['lat'], out['dt']))
+            # If doing 20m segments, then unique ID is combo of id_100m and id_20m
+            if do_20m: 
+                out['id_unique'] = list(map(lambda i1, i2: \
+                                '{}-{}'.format(i1, i2), out['id_100m'], out['id_20m']))
 
-        # If doing 20m segments, then unique ID is combo of id_100m and id_20m
-        if do_20m: 
-            out['id_unique'] = list(map(lambda i1, i2: \
-                            '{}-{}'.format(i1, i2), out['id_100m'], out['id_20m']))
-
-        # Otherwise, unique ID is just 100m id (yes this will add a duplicate
-        # column but it will enable a consisent unique ID column name. 
-        # un-likely to process 100m with this code anyways so w/e)
-        else:
-            out['id_unique'] = out['id_100m']
+            # Otherwise, unique ID is just 100m id (yes this will add a duplicate
+            # column but it will enable a consisent unique ID column name. 
+            # un-likely to process 100m with this code anyways so w/e)
+            else:
+                out['id_unique'] = out['id_100m']
 
         # Lastly, try and reorder the columns before writing to .csv. 
         # This part is partially hardcoded according to expected column names
@@ -965,6 +977,7 @@ def main():
     parser.add_argument("--minmonth" , type=int, choices=[Range(1, 12)], default=6, help="Min month of ATL08 shots for output to include")
     parser.add_argument("--maxmonth" , type=int, choices=[Range(1, 12)], default=9, help="Max month of ATL08 shots for output to include")
     parser.add_argument("--list_lc_h_can_thresh", nargs="+", type=int, default=[0, 60, 60, 60, 60, 60, 60, 50, 50, 50, 50, 50, 50, 20, 10, 10, 5, 5, 0, 0, 0, 0, 0], help="A list of land-cover specific thresholds for h_can")
+    parser.add_argument('--dict_misc_thresh', type=json.loads, default={'h_can_unc': 5, 'seg_cover': 32767, 'sol_el': 5, 'sig_topo': 2.5, 'h_dif_ref': 25}, help="Dict of filt columns (keys) and thresholds (values) for which values less than will remain")
     parser.add_argument('--no-overwrite', dest='overwrite', action='store_false', help='Turn overwrite off (To help complete big runs that were interrupted)')
     parser.set_defaults(overwrite=True)
     parser.add_argument('--no-filter-qual', dest='filter_qual', action='store_false', help='Turn off quality filtering (To control filtering downstream)')
