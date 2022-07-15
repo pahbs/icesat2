@@ -5,13 +5,15 @@
 # ------ need to re-run this script if you change the default filtering in FilterUtils.py
 # ------ to turn off filter, add '--no-filter-qual' to extract_filter_atl08.py call
 #
-# pdsh -g ecotone,forest do_extract_filter_atl08.sh 2021 /att/nobackup/pmontesa/userfs02/data/icesat2/list_atl08.004_jjas boreal
-# pdsh -g ilab,forest do_extract_filter_atl08.sh \"2018 2019 2020 2021\" /att/nobackup/pmontesa/userfs02/data/icesat2/list_atl08.005 senegal
-# do_extract_filter_atl08.sh "2018 2019 2020 2021" /att/nobackup/pmontesa/userfs02/data/icesat2/list_atl08.005 hi_lat_na_latest
+# This used for Howland which took a custom misc quality filter dict
+# pdsh -g forest,ilab do_extract_filter_atl08.sh \"2018 2019 2020 2021 2022\" /adapt/nobackup/people/pmontesa/userfs02/data/icesat2/list_atl08.005 howland
+# pdsh -g ecotone,forest do_extract_filter_atl08.sh 2021 /adapt/nobackup/people/pmontesa/userfs02/data/icesat2/list_atl08.004_jjas boreal
+# pdsh -g ilab,forest do_extract_filter_atl08.sh \"2018 2019 2020 2021\" /adapt/nobackup/people/pmontesa/userfs02/data/icesat2/list_atl08.005 senegal
+# do_extract_filter_atl08.sh "2018 2019 2020 2021" /adapt/nobackup/people/pmontesa/userfs02/data/icesat2/list_atl08.005 hi_lat_na_latest
 #
 # First, create the ATL08 v4 data list like this:
-# parallel 'ls /att/pubrepo/IceSAT-2/ATLAS/ATL08.004/{}.0[6-9].*/*h5 >> /att/nobackup/pmontesa/userfs02/data/icesat2/list_atl08.004_jjas_{}' ::: 2018 2019 2020 2021
-# parallel 'ls /att/pubrepo/IceSAT-2/ATLAS/ATL08.005/{}*/*h5 >> /att/nobackup/pmontesa/userfs02/data/icesat2/list_atl08.005_{}' ::: 2018 2019 2020 2021 2022
+# parallel 'ls /att/pubrepo/IceSAT-2/ATLAS/ATL08.004/{}.0[6-9].*/*h5 >> /adapt/nobackup/people/pmontesa/userfs02/data/icesat2/list_atl08.004_jjas_{}' ::: 2018 2019 2020 2021
+# parallel 'ls /att/pubrepo/IceSAT-2/ATLAS/ATL08.005/{}*/*h5 >> /adapt/nobackup/people/pmontesa/userfs02/data/icesat2/list_atl08.005_{}' ::: 2018 2019 2020 2021 2022
 
 # Second, chunk up by nodes
 # source activate py2
@@ -59,8 +61,11 @@ for YEAR in ${YEARS_LIST} ; do
     fi
     if [[ "$GEO_DOMAIN" == "howland" ]] ; then
         # ---NOT YET RUN OR TESTED 
+        # This is a custom quality filter with misc thresholds applied to specified columns! NOTE: sol_el threshold not included, so USING DAYTIME DATA HERE
+        DICT_STRING=$(echo {\"h_can_unc\": 5, \"seg_cover\": 32767, \"sig_topo\": 2.5, \"h_dif_ref\": 25})
+        echo $DICT_STRING
         # This LC h_can thresh list is same as boreal.
-        parallel --progress 'extract_filter_atl08_v005.py --list_lc_h_can_thresh 0 60 60 60 60 60 60 50 50 50 50 50 50 15 10 10 5 5 5 0 0 0 0 --i {1} -o {2}/{3} --minlon -69 --maxlon -68 --minlat 44 --maxlat 46 --minmonth 6 --maxmonth 9' ::: ${FILE_LIST} ::: ${OUTDIR} ::: ${YEAR}
+        parallel --progress 'extract_filter_atl08_v005.py --list_lc_h_can_thresh 0 60 60 60 60 60 60 50 50 50 50 50 50 15 10 10 5 5 5 0 0 0 0 --i {1} -o {2}/{3} --minlon -69 --maxlon -68 --minlat 44 --maxlat 46 --minmonth 6 --maxmonth 9 --dict_misc_thresh {4} --do_20m' ::: ${FILE_LIST} ::: ${OUTDIR} ::: ${YEAR} ::: "$(echo ${DICT_STRING})"
     fi
     if [[ "$GEO_DOMAIN" == "senegal_no_filt" ]] ; then
         # This LC h_can thresh list is good for Senegal: it gives Shrubland and Cropland a threshold of 15; otherwise same as boreal.
