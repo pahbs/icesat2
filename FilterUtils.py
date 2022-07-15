@@ -561,3 +561,131 @@ def filter_atl08_qual_v3(input_fn=None,
     else:
         print("\tFiltered obs. for all columns")
         return(atl08_df_filt)
+    
+def filter_atl08_qual_v4(input_fn=None, 
+                         subset_cols_list=['rh25','rh50','rh60','rh70','rh75','rh80','rh85','rh90','rh95','h_can','h_max_can','sol_el','seg_landcov'], 
+                         filt_cols =['h_can', 'h_can_unc','h_dif_ref','m','msw_flg','beam_type','seg_snow', 'sig_topo','seg_cover','sol_el','seg_landcov'], 
+                         filt_dict_misc_thresh = { # default boreal thresholds
+                                                    'h_can_unc': 5, 
+                                                    'seg_cover': 32767, 
+                                                    'sol_el':    5,
+                                                    'sig_topo':  2.5,
+                                                    'h_dif_ref': 25
+                                                    },
+                         list_lc_class_values=[0, 111, 113, 112, 114, 115, 116, 121, 123, 122, 124, 125, 126, 20, 30, 90, 100, 60, 40, 50, 70, 80, 200],
+                         list_lc_h_can_thresh=None,
+                         #thresh_sig_topo=None, thresh_h_dif=None, 
+                         thresh_h_can = 100,
+                         #thresh_seg_cov = 32767, # Copernicus fractional cover nodata flag
+                         #thresh_sol_el = 5,
+                         #thresh_h_can_unc = 5,
+                         month_min=None, month_max=None, 
+                         SUBSET_COLS=True, DO_PREP=True):
+    '''
+    Quality filtering Function(Version 4)
+    This is only appropriate for ATL08 v5 and above
+    Update to handle land-cover based h_can thresholding
+    Update to take in a filter dictionary that using misc threshold values - this makes this flexible for applying across other domains
+        notably the sol_el field needs to be adjustable in case there is no night data for regions.
+    Returns a data frame
+    Note: beams 1 & 5 strong (better radiometric perf, sensitive), then beam 3 [NOT IMPLEMENTED]
+    '''
+    # TODO: filt col names: make sure you have these in the EPT db
+    print("\nFiltering by quality")
+    
+    if not subset_cols_list:
+        print("filter_atl08_qual_v4: Must supply a list of strings matching ATL08 column that will be used to return a subset")
+        os._exit(1) 
+    elif thresh_h_can and list_lc_h_can_thresh is None:
+        print("filter_atl08_qual_v4: Must supply one of these: a threshold for h_can, or a land cover-specific list of h_can thresholds")
+        os._exit(1)    
+    elif month_min is None or month_max is None:
+        print("filter_atl08_qual_v4: Must supply a month_min and month_max")
+        os._exit(1)  
+        
+    if input_fn is not None:
+        if not isinstance(input_fn, pd.DataFrame):
+            if input_fn.endswith('geojson'):
+                atl08_df = gpd.read(input_fn)
+            elif input_fn.endswith('csv'):
+                atl08_df = pd.read_csv(input_fn)
+            else:
+                print("Input filename must be a CSV, GEOJSON, or pd.DataFrame")
+                os._exit(1)
+        else:
+            atl08_df = input_fn
+            
+    if DO_PREP:
+        # Run the prep to get fields needed (v003)
+        atl08_df_prepd = prep_filter_atl08_qual(atl08_df)
+    else:
+        atl08_df_prepd = atl08_df
+    
+    
+    # Check that you have the cols that are required for the filter
+    filt_cols_not_in_df = [col for col in filt_cols if col not in atl08_df_prepd.columns] 
+    if len(filt_cols_not_in_df) > 0:
+        print("\tThese filter columns not found in input df: {}".format(filt_cols_not_in_df))
+        print("\tNo quality filtering done. Returning original df.")
+        return(atl08_df)
+    
+    atl08_df = None
+    
+    # Filtering
+    #
+    print(f"\tBefore quality filtering: \t\t{atl08_df_prepd.shape[0]} observations in the input dataframe.")
+                        
+    # Return a df prep'd for filtering
+    atl08_df_filt = atl08_df_prepd
+    
+    # [1] Filter using basic flags
+    #
+    # Static quality filter flags
+    filt_params_static = [
+                             ['msw_flg', 0],
+                             ['beam_type', 'Strong'],
+                             ['seg_snow' , 1]
+                        ]
+    # Apply filter
+    for flag, val in filt_params_static:
+        atl08_df_filt = atl08_df_filt[atl08_df_filt[flag] == val]
+        print(f"\tAfter {flag}={val}: \t\t{atl08_df_filt.shape[0]} observations in the dataframe.")
+        
+    # [2] Filter with h_can thresholds
+    if list_lc_h_can_thresh is None:
+        atl08_df_filt = atl08_df_filt[atl08_df_filt.h_can < thresh_h_can]
+        print(f"\tAfter basic h_can threshold: \t\t{atl08_df_filt.shape[0]} observations in the dataframe.")
+    else:
+        
+        dict_lc_h_can_thresh = dict(zip(list_lc_class_values, list_lc_h_can_thresh))
+        print(f"\tLand cover threshold dictionary: \n{dict_lc_h_can_thresh}")
+        atl08_df_filt = pd.concat([atl08_df_filt[(atl08_df_filt.seg_landcov == lc_val) & (atl08_df_filt.h_can < thresh_h_can)] for lc_val, thresh_h_can in dict_lc_h_can_thresh.items()])
+        print(f"\tAfter land-cover specific h_can thresholds: \t\t{atl08_df_filt.shape[0]} observations in the dataframe.")
+      
+    # [3] Filter using misc thresholds (global; eg not LC-specific)
+    #
+    # Obs LESS than these values will remain
+    # Apply filter
+    atl08_df_filt = atl08_df_filt.loc[(atl08_df_filt[list(filt_dict_misc_thresh)] < pd.Series(filt_dict_misc_thresh)).all(axis=1)] 
+    print(f"\tAfter misc thresholding with {[f'{k} < {v}' for k, v in filt_dict_misc_thresh.items()]}: \t\t{atl08_df_filt.shape[0]} observations in the output dataframe.")
+    
+    # [4] Filter using min and max months
+    #
+    atl08_df_filt =  atl08_df_filt[
+                                (atl08_df_filt.m >= month_min ) & 
+                                (atl08_df_filt.m <= month_max) 
+                                    ]    
+    print(f"\tAfter month filters: {month_min}-{month_max}")
+    print(f"\tAfter all quality filtering: \t\t{atl08_df_filt.shape[0]} observations in the output dataframe.")
+    
+    atl08_df_prepd = None
+    
+    print("\tReturning a pandas data frame.")
+    if SUBSET_COLS:
+        subset_cols_list = ['lon','lat'] + subset_cols_list
+        print("\tFiltered obs. for columns: {}".format(subset_cols_list))
+        print(f"\tData frame shape: {atl08_df_filt[subset_cols_list].shape} ")
+        return(atl08_df_filt[subset_cols_list])
+    else:
+        print("\tFiltered obs. for all columns")
+        return(atl08_df_filt)
