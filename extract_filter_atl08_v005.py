@@ -867,11 +867,15 @@ def extract_atl08(args):
         #                                            filt_cols=['h_can','h_dif_ref','m','msw_flg','beam_type','seg_snow','sig_topo'], 
         #                                            list_lc_h_can_thresh=args.list_lc_h_can_thresh,
         #                                            thresh_h_can=100, thresh_h_dif=25, thresh_sig_topo=2.5, month_min=args.minmonth, month_max=args.maxmonth)
-        print('Apply the aggressive land-cover based (v3) filters updated in Jan/Feb 2022 and use a dict of misc thresholds for other filter cols to allow for flexibility in misc filtering')
-        out = FilterUtils.filter_atl08_qual_v4(out, SUBSET_COLS=True, DO_PREP=True,
-                                              subset_cols_list=['rh25','rh50','rh60','rh70','rh75','rh80','rh90','h_can','h_max_can',
+        print('Apply the aggressive land-cover based (v4) filters updated in Jan/Feb 2022 and use a dict of misc thresholds for other filter cols to allow for flexibility in misc filtering')
+        SUBSET_COLS_LIST = ['rh25','rh50','rh60','rh70','rh75','rh80','rh90','h_can','h_max_can',
                                                                      'h_te_best','granule_name',
-                                                                     'seg_landcov','seg_cover','sol_el','y','m','doy'], 
+                                                                     'seg_landcov','seg_cover','sol_el','y','m','doy']
+        if do_20m:
+            SUBSET_COLS_LIST = SUBSET_COLS_LIST + ['lon_20m','lat_20m','h_can_20m']
+
+        out = FilterUtils.filter_atl08_qual_v4(out, SUBSET_COLS=True, DO_PREP=True,
+                                              subset_cols_list=SUBSET_COLS_LIST, 
                                                    filt_cols=['h_can','h_dif_ref','m','msw_flg','beam_type','seg_snow','sig_topo'], 
                                                    list_lc_h_can_thresh=args.list_lc_h_can_thresh,
                                                    filt_dict_misc_thresh = args.dict_misc_thresh, month_min=args.minmonth, month_max=args.maxmonth)
